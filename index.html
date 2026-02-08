@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>LaxKeeper - Lacrosse Stats Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Home Screen -->
+        <div id="home-screen" class="screen active">
+            <header>
+                <h1>🥍 LaxKeeper</h1>
+                <p>Lacrosse Stats Tracker</p>
+            </header>
+
+            <nav class="main-nav">
+                <button class="nav-btn" onclick="showScreen('roster-screen')">
+                    <span class="icon">👥</span>
+                    <span>Manage Roster</span>
+                </button>
+                <button class="nav-btn" onclick="showScreen('schedule-screen')">
+                    <span class="icon">📅</span>
+                    <span>Schedule Game</span>
+                </button>
+                <button class="nav-btn" onclick="showScreen('games-screen')">
+                    <span class="icon">🎮</span>
+                    <span>Start Game</span>
+                </button>
+                <button class="nav-btn" onclick="showScreen('history-screen')">
+                    <span class="icon">📊</span>
+                    <span>Game History</span>
+                </button>
+                <button class="nav-btn" onclick="showScreen('season-summary-screen')">
+                    <span class="icon">📈</span>
+                    <span>Season Summary</span>
+                </button>
+                <button class="nav-btn" onclick="showScreen('settings-screen')">
+                    <span class="icon">⚙️</span>
+                    <span>Settings</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Roster Management Screen -->
+        <div id="roster-screen" class="screen">
+            <header>
+                <button class="back-btn" onclick="showScreen('home-screen')">← Back</button>
+                <h2>Manage Roster</h2>
+            </header>
+
+            <div class="content">
+                <div class="add-player-form">
+                    <h3>Add Player</h3>
+                    <input type="text" id="player-name" placeholder="Player Name" class="input-field">
+                    <input type="number" id="player-number" placeholder="Jersey #" class="input-field">
+                    <select id="player-position" class="input-field">
+                        <option value="">Select Position</option>
+                        <option value="Attack">Attack</option>
+                        <option value="Midfield">Midfield</option>
+                        <option value="Defense">Defense</option>
+                        <option value="Goalie">Goalie</option>
+                    </select>
+                    <button class="btn-primary" onclick="addPlayer()">Add Player</button>
+                </div>
+
+                <div class="roster-list">
+                    <h3>Current Roster</h3>
+                    <div id="roster-display"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Schedule Game Screen -->
+        <div id="schedule-screen" class="screen">
+            <header>
+                <button class="back-btn" onclick="showScreen('home-screen')">← Back</button>
+                <h2>Schedule Game</h2>
+            </header>
+
+            <div class="content">
+                <div class="game-form">
+                    <input type="text" id="opponent-name" placeholder="Opponent Name" class="input-field">
+
+                    <label style="color: var(--text-primary); font-weight: 600; margin-bottom: 0.5rem; display: block;">Game Date</label>
+                    <input type="date" id="game-date" class="input-field">
+
+                    <label style="color: var(--text-primary); font-weight: 600; margin-bottom: 0.5rem; display: block;">Game Time</label>
+                    <input type="time" id="game-time" class="input-field">
+
+                    <input type="text" id="game-location" placeholder="Location" class="input-field">
+
+                    <h3>Game Format</h3>
+                    <div class="radio-group">
+                        <label>
+                            <input type="radio" name="game-format" value="quarters" checked>
+                            Quarters (4 periods)
+                        </label>
+                        <label>
+                            <input type="radio" name="game-format" value="halves">
+                            Halves (2 periods)
+                        </label>
+                    </div>
+
+                    <label>Period Duration (minutes):</label>
+                    <input type="number" id="period-duration" value="12" min="1" max="30" class="input-field">
+
+                    <button class="btn-primary" onclick="scheduleGame()">Schedule Game</button>
+                </div>
+
+                <div class="scheduled-games">
+                    <h3>Scheduled Games</h3>
+                    <div id="scheduled-games-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Games List Screen -->
+        <div id="games-screen" class="screen">
+            <header>
+                <button class="back-btn" onclick="showScreen('home-screen')">← Back</button>
+                <h2>Start a Game</h2>
+            </header>
+
+            <div class="content">
+                <div id="games-list"></div>
+            </div>
+        </div>
+
+        <!-- Live Game Screen -->
+        <div id="game-screen" class="screen">
+            <header class="game-header">
+                <button class="back-btn" onclick="confirmEndGame()">End Game</button>
+                <div id="game-info"></div>
+            </header>
+
+            <div class="scoreboard">
+                <!-- Clock Control Button (left) -->
+                <button class="clock-control-btn" id="left-clock-btn" onclick="toggleClock()">
+                    <span id="left-clock-btn-text">START</span>
+                </button>
+
+                <div class="team home-team">
+                    <h3>Home</h3>
+                    <div class="score" id="home-score">0</div>
+                    <button class="score-btn" onclick="adjustScore('home', 1)">+</button>
+                    <button class="score-btn" onclick="adjustScore('home', -1)">-</button>
+                </div>
+
+                <div class="clock-container">
+                    <div class="period" id="period-display">Q1</div>
+                    <div class="clock" id="game-clock">12:00</div>
+                    <div class="clock-controls">
+                        <button class="btn-secondary" onclick="toggleClock()">
+                            <span id="clock-btn-text">Start</span>
+                        </button>
+                        <button class="btn-secondary" onclick="resetClock()">Reset</button>
+                    </div>
+                    <button class="btn-primary" onclick="nextPeriod()">Next Period</button>
+
+                    <!-- Penalty Display -->
+                    <div id="penalty-display" style="margin-top: 1rem; width: 100%;"></div>
+                </div>
+
+                <div class="team away-team">
+                    <h3 id="opponent-display">Opponent</h3>
+                    <div class="score" id="away-score">0</div>
+                    <button class="score-btn" onclick="adjustScore('away', 1)">+</button>
+                    <button class="score-btn" onclick="adjustScore('away', -1)">-</button>
+                </div>
+
+                <!-- Voice Input Button (right) -->
+                <button id="voice-mic-btn" class="voice-mic-btn" onclick="toggleVoiceInput()" aria-label="Voice input">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                    </svg>
+                    <span class="voice-mic-label">VOICE</span>
+                </button>
+            </div>
+
+            <div class="stats-entry">
+                <h3>Select Stat to Record</h3>
+                <div id="stat-buttons" class="stat-buttons">
+                    <div class="stat-grid">
+                        <button class="stat-btn" onclick="selectStat('faceoff-won')">Faceoff Won</button>
+                        <button class="stat-btn" onclick="selectStat('faceoff-lost')">Faceoff Lost</button>
+                        <button class="stat-btn" onclick="selectStat('ground-ball')">Ground Ball</button>
+                        <button class="stat-btn" onclick="selectStat('shot')">Shot</button>
+                        <button class="stat-btn" onclick="selectStat('goal')">Goal</button>
+                        <button class="stat-btn" onclick="selectStat('assist')">Assist</button>
+                        <button class="stat-btn" onclick="selectStat('turnover')">Turnover</button>
+                        <button class="stat-btn" onclick="selectStat('caused-turnover')">Caused TO</button>
+                        <button class="stat-btn" onclick="selectStat('save')">Save (GK)</button>
+                        <button class="stat-btn stat-btn-penalty" onclick="selectStat('penalty')">Penalty</button>
+                    </div>
+                </div>
+
+                <div id="player-selection" class="player-selection hidden">
+                    <h3>Select Player for <span id="selected-stat-name"></span></h3>
+                    <button class="btn-opponent" onclick="recordOpponentStat()">
+                        <span id="opponent-team-name">Opponent</span> Team
+                    </button>
+                    <div id="player-buttons" class="player-grid"></div>
+                    <button class="btn-secondary" onclick="clearStatSelection()">Back to Stats</button>
+                </div>
+            </div>
+
+            <div class="game-stats-summary">
+                <h3>Game Stats</h3>
+                <button class="btn-secondary" onclick="toggleStatsView()">View Stats</button>
+            </div>
+
+            <div id="voice-feedback" class="voice-feedback hidden">
+                <div id="voice-feedback-status">Listening...</div>
+                <div id="voice-feedback-transcript"></div>
+            </div>
+
+            <div id="undo-toast" class="undo-toast hidden">
+                <span id="undo-toast-text"></span>
+                <button id="undo-toast-btn" onclick="undoLastVoiceStat()">UNDO</button>
+            </div>
+        </div>
+
+        <!-- Game History Screen -->
+        <div id="history-screen" class="screen">
+            <header>
+                <button class="back-btn" onclick="showScreen('home-screen')">← Back</button>
+                <h2>Game History</h2>
+            </header>
+
+            <div class="content">
+                <div id="history-list"></div>
+            </div>
+        </div>
+
+        <!-- Season Summary Screen -->
+        <div id="season-summary-screen" class="screen">
+            <header>
+                <button class="back-btn" onclick="showScreen('home-screen')">← Back</button>
+                <h2>Season Summary</h2>
+            </header>
+
+            <div class="content">
+                <div id="season-summary-display"></div>
+            </div>
+        </div>
+
+        <!-- Settings Screen -->
+        <div id="settings-screen" class="screen">
+            <header>
+                <button class="back-btn" onclick="showScreen('home-screen')">← Back</button>
+                <h2>Settings</h2>
+            </header>
+
+            <div class="content">
+                <div class="settings-section">
+                    <h3>Team Name</h3>
+                    <input type="text" id="team-name" placeholder="Enter team name" class="input-field">
+                    <button class="btn-primary" onclick="saveTeamName()">Save Team Name</button>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Data Management</h3>
+                    <button class="btn-secondary" onclick="exportData()">📥 Export Data</button>
+                    <button class="btn-secondary" onclick="importData()">📤 Import Data</button>
+                    <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
+                </div>
+
+                <div class="settings-section danger-zone">
+                    <h3>Danger Zone</h3>
+                    <button class="btn-danger" onclick="clearAllData()">Clear All Data</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
