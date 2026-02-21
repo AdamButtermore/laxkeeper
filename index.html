@@ -263,6 +263,30 @@
                     <button class="btn-primary" onclick="saveTeamName()">Save Team Name</button>
                 </div>
 
+                <div class="settings-section" id="team-sync-section">
+                    <h3>Cloud Sync</h3>
+                    <!-- State A: No team -->
+                    <div id="team-no-sync" class="team-sync-state">
+                        <p class="sync-description">Create or join a team to sync data across devices.</p>
+                        <button class="btn-primary" onclick="LaxSync.createTeam()">Create Team</button>
+                        <div class="sync-divider"><span>or</span></div>
+                        <input type="text" id="join-team-code" placeholder="Enter team code"
+                               class="input-field" maxlength="6"
+                               style="text-transform:uppercase; text-align:center; font-size:1.4rem; letter-spacing:0.3rem;">
+                        <button class="btn-secondary" onclick="LaxSync.joinTeam()">Join Team</button>
+                    </div>
+                    <!-- State B: Connected -->
+                    <div id="team-connected" class="team-sync-state" style="display:none;">
+                        <div class="team-code-display">
+                            <p class="sync-label">Your Team Code</p>
+                            <div class="team-code-value" id="display-team-code">------</div>
+                            <p class="sync-hint">Share this code with other scorekeepers</p>
+                        </div>
+                        <button class="btn-secondary" onclick="LaxSync.copyTeamCode()">Copy Code</button>
+                        <button class="btn-danger" onclick="LaxSync.leaveTeam()" style="margin-top:1rem;">Leave Team</button>
+                    </div>
+                </div>
+
                 <div class="settings-section">
                     <h3>Data Management</h3>
                     <button class="btn-secondary" onclick="exportData()">📥 Export Data</button>
@@ -278,6 +302,11 @@
         </div>
     </div>
 
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="firebase-sync.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
