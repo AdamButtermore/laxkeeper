@@ -478,7 +478,7 @@ function selectStat(statType) {
         'goal': 'Goal',
         'assist': 'Assist',
         'turnover': 'Turnover',
-        'caused-turnover': 'Caused Turnover',
+        'caused-turnover': 'Takeaway',
         'save': 'Save',
         'penalty': 'Penalty'
     };
@@ -719,7 +719,7 @@ function toggleStatsView() {
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">FOW</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">FOL</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">TO</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">CT</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">TA</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Sv</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Pen</th>
                     </tr>
@@ -778,7 +778,7 @@ function toggleStatsView() {
             statsHtml += `Goals: ${goals} | Assists: ${assists} | Points: ${goals + assists} | `;
             statsHtml += `Shots: ${oppStats.shot || 0} | GB: ${oppStats['ground-ball'] || 0} | `;
             statsHtml += `FO Won: ${oppStats['faceoff-won'] || 0} | FO Lost: ${oppStats['faceoff-lost'] || 0} | `;
-            statsHtml += `Turnovers: ${oppStats.turnover || 0} | Caused TO: ${oppStats['caused-turnover'] || 0} | `;
+            statsHtml += `Turnovers: ${oppStats.turnover || 0} | Takeaways: ${oppStats['caused-turnover'] || 0} | `;
             statsHtml += `Saves: ${oppStats.save || 0} | Penalties: ${oppStats.penalty || 0}`;
             statsHtml += `</div></div>`;
         } else {
@@ -869,7 +869,7 @@ function viewGameStats(gameId) {
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">FOW</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">FOL</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">TO</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">CT</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">TA</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Sv</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Pen</th>
                     </tr>
@@ -1026,7 +1026,7 @@ function loadSeasonSummary() {
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">FOW</th>
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">FOL</th>
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">TO</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">CT</th>
+                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">TA</th>
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Sv</th>
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Pen</th>
                     </tr>
@@ -1460,7 +1460,7 @@ function parseVoiceCommand(rawText) {
 
     // Multi-word stat patterns (check longest first)
     const statPatterns = [
-        { patterns: ['caused turnover', 'caused to', 'cause turnover', 'ct'], stat: 'caused-turnover' },
+        { patterns: ['takeaway', 'take away', 'caused turnover', 'caused to', 'cause turnover', 'ct'], stat: 'caused-turnover' },
         { patterns: ['ground ball', 'groundball', 'gb'], stat: 'ground-ball' },
         { patterns: ['faceoff win', 'face off win', 'fo win', 'faceoff won', 'face off won', 'fo won', 'face-off win', 'face-off won'], stat: 'faceoff-won' },
         { patterns: ['faceoff lost', 'face off lost', 'fo lost', 'faceoff loss', 'face-off lost', 'face off loss'], stat: 'faceoff-lost' },
@@ -1576,7 +1576,7 @@ function recordVoicePlayerStat(playerId, statType) {
         'faceoff-won': 'Faceoff Won', 'faceoff-lost': 'Faceoff Lost',
         'ground-ball': 'Ground Ball', 'shot': 'Shot', 'goal': 'Goal',
         'assist': 'Assist', 'turnover': 'Turnover',
-        'caused-turnover': 'Caused TO', 'save': 'Save'
+        'caused-turnover': 'Takeaway', 'save': 'Save'
     };
 
     const undoActions = [];
@@ -1614,7 +1614,7 @@ function recordVoiceOpponentStat(statType) {
         'faceoff-won': 'Faceoff Won', 'faceoff-lost': 'Faceoff Lost',
         'ground-ball': 'Ground Ball', 'shot': 'Shot', 'goal': 'Goal',
         'assist': 'Assist', 'turnover': 'Turnover',
-        'caused-turnover': 'Caused TO', 'save': 'Save'
+        'caused-turnover': 'Takeaway', 'save': 'Save'
     };
 
     const undoActions = [];
