@@ -133,7 +133,6 @@
         <!-- Live Game Screen -->
         <div id="game-screen" class="screen">
             <header class="game-header">
-                <button class="back-btn" onclick="confirmEndGame()">End Game</button>
                 <div id="game-info"></div>
             </header>
 
@@ -222,6 +221,10 @@
             <div id="undo-toast" class="undo-toast hidden">
                 <span id="undo-toast-text"></span>
                 <button id="undo-toast-btn" onclick="undoLastVoiceStat()">UNDO</button>
+            </div>
+
+            <div class="end-game-bar">
+                <button class="btn-danger" onclick="confirmEndGame()">End Game</button>
             </div>
         </div>
 
