@@ -1445,6 +1445,12 @@ function parseVoiceCommand(rawText) {
     text = text.replace(/\b(um|uh|like|the|a|an|so|okay|hey|please|number|player)\b/g, '').trim();
     text = text.replace(/\s+/g, ' ');
 
+    // Fix common speech-to-text misheard words BEFORE number conversion
+    // "won" is often transcribed as "one" or "1"
+    text = text.replace(/\b(face\s*off|faceoff)\s+(one|1|want|juan)\b/gi, '$1 won');
+    // "caused" is often transcribed as "cost", "calls", "cause"
+    text = text.replace(/\b(cost|calls|cause|caught|called)\s+(turnover|to)\b/gi, 'caused turnover');
+
     // Convert spoken numbers to digits
     text = convertSpokenNumbers(text);
 
@@ -1454,10 +1460,10 @@ function parseVoiceCommand(rawText) {
 
     // Multi-word stat patterns (check longest first)
     const statPatterns = [
-        { patterns: ['caused turnover', 'caused to', 'ct'], stat: 'caused-turnover' },
+        { patterns: ['caused turnover', 'caused to', 'cause turnover', 'ct'], stat: 'caused-turnover' },
         { patterns: ['ground ball', 'groundball', 'gb'], stat: 'ground-ball' },
-        { patterns: ['faceoff won', 'face off won', 'fo won', 'faceoff win', 'face-off won'], stat: 'faceoff-won' },
-        { patterns: ['faceoff lost', 'face off lost', 'fo lost', 'faceoff loss', 'face-off lost'], stat: 'faceoff-lost' },
+        { patterns: ['faceoff won', 'face off won', 'fo won', 'faceoff win', 'face-off won', 'face off win'], stat: 'faceoff-won' },
+        { patterns: ['faceoff lost', 'face off lost', 'fo lost', 'faceoff loss', 'face-off lost', 'face off loss'], stat: 'faceoff-lost' },
         { patterns: ['goal', 'score'], stat: 'goal' },
         { patterns: ['assist'], stat: 'assist' },
         { patterns: ['shot'], stat: 'shot' },
