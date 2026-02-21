@@ -1446,8 +1446,8 @@ function parseVoiceCommand(rawText) {
     text = text.replace(/\s+/g, ' ');
 
     // Fix common speech-to-text misheard words BEFORE number conversion
-    // "won" is often transcribed as "one" or "1"
-    text = text.replace(/\b(face\s*off|faceoff)\s+(one|1|want|juan)\b/gi, '$1 won');
+    // "win" is often transcribed as "one" or "1" or "when"
+    text = text.replace(/\b(face\s*off|faceoff)\s+(one|1|want|juan|when)\b/gi, '$1 win');
     // "caused" is often transcribed as "cost", "calls", "cause"
     text = text.replace(/\b(cost|calls|cause|caught|called)\s+(turnover|to)\b/gi, 'caused turnover');
 
@@ -1462,7 +1462,7 @@ function parseVoiceCommand(rawText) {
     const statPatterns = [
         { patterns: ['caused turnover', 'caused to', 'cause turnover', 'ct'], stat: 'caused-turnover' },
         { patterns: ['ground ball', 'groundball', 'gb'], stat: 'ground-ball' },
-        { patterns: ['faceoff won', 'face off won', 'fo won', 'faceoff win', 'face-off won', 'face off win'], stat: 'faceoff-won' },
+        { patterns: ['faceoff win', 'face off win', 'fo win', 'faceoff won', 'face off won', 'fo won', 'face-off win', 'face-off won'], stat: 'faceoff-won' },
         { patterns: ['faceoff lost', 'face off lost', 'fo lost', 'faceoff loss', 'face-off lost', 'face off loss'], stat: 'faceoff-lost' },
         { patterns: ['goal', 'score'], stat: 'goal' },
         { patterns: ['assist'], stat: 'assist' },
