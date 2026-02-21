@@ -1411,9 +1411,72 @@ function hideVoiceFeedback() {
 }
 
 // ===== SPEECH PARSING =====
+
+// Levenshtein distance between two strings
+function levenshtein(a, b) {
+    const m = a.length, n = b.length;
+    if (m === 0) return n;
+    if (n === 0) return m;
+    const dp = [];
+    for (let i = 0; i <= m; i++) {
+        dp[i] = [i];
+        for (let j = 1; j <= n; j++) {
+            if (i === 0) { dp[i][j] = j; continue; }
+            dp[i][j] = a[i - 1] === b[j - 1]
+                ? dp[i - 1][j - 1]
+                : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+        }
+    }
+    return dp[m][n];
+}
+
+// Known speech-to-text mishearings → corrected word
+const VOICE_ALIASES = {
+    // Goal
+    'call': 'goal', 'cole': 'goal', 'coal': 'goal', 'gold': 'goal',
+    'gall': 'goal', 'gol': 'goal', 'cool': 'goal', 'gaul': 'goal',
+    'gull': 'goal', 'colt': 'goal', 'go': 'goal', 'ghoul': 'goal',
+    // Score
+    'store': 'score', 'scored': 'score', 'core': 'score', 'scar': 'score',
+    // Shot
+    'shop': 'shot', 'shut': 'shot', 'shout': 'shot', 'short': 'shot',
+    'showed': 'shot', 'shock': 'shot', 'shots': 'shot', 'shah': 'shot',
+    // Save
+    'safe': 'save', 'saved': 'save', 'shave': 'save', 'saves': 'save',
+    'say': 'save', 'sage': 'save',
+    // Assist
+    'assess': 'assist', 'assessed': 'assist', 'insist': 'assist',
+    'assists': 'assist', 'exist': 'assist', 'assisted': 'assist',
+    // Penalty
+    'penalize': 'penalty', 'penalties': 'penalty',
+    // Faceoff helpers
+    'won': 'win', 'one': 'win', 'want': 'win', 'when': 'win', 'juan': 'win',
+    'loss': 'lost', 'laws': 'lost', 'los': 'lost',
+    'phase': 'face', 'faith': 'face', 'bass': 'face',
+    // Ground ball helpers
+    'grown': 'ground', 'round': 'ground', 'crowned': 'ground',
+    // Turnover / Takeaway
+    'turnovers': 'turnover',
+    'takeaways': 'takeaway',
+};
+
+// Stat trigger phrases — multi-word first (higher priority)
+const STAT_TRIGGERS = [
+    { phrases: ['ground ball'], stat: 'ground-ball' },
+    { phrases: ['faceoff win', 'face off win'], stat: 'faceoff-won' },
+    { phrases: ['faceoff lost', 'face off lost', 'faceoff loss', 'face off loss'], stat: 'faceoff-lost' },
+    { phrases: ['takeaway', 'take away'], stat: 'caused-turnover' },
+    { phrases: ['turnover', 'turn over'], stat: 'turnover' },
+    { phrases: ['goal', 'score'], stat: 'goal' },
+    { phrases: ['assist'], stat: 'assist' },
+    { phrases: ['shot'], stat: 'shot' },
+    { phrases: ['save'], stat: 'save' },
+    { phrases: ['penalty'], stat: 'penalty' },
+];
+
 function convertSpokenNumbers(text) {
     const numberWords = {
-        'zero': '0', 'one': '1', 'two': '2', 'three': '3', 'four': '4',
+        'zero': '0', 'two': '2', 'three': '3', 'four': '4',
         'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9',
         'ten': '10', 'eleven': '11', 'twelve': '12', 'thirteen': '13',
         'fourteen': '14', 'fifteen': '15', 'sixteen': '16', 'seventeen': '17',
@@ -1428,9 +1491,9 @@ function convertSpokenNumbers(text) {
         'thirty-five': '35', 'thirty five': '35', 'forty': '40', 'fifty': '50',
         'sixty': '60', 'seventy': '70', 'eighty': '80', 'ninety': '90', 'hundred': '99'
     };
+    // Note: 'one' intentionally excluded — too often a mishearing of 'won'
 
     let result = text;
-    // Sort by length descending so "twenty one" matches before "one"
     const sorted = Object.keys(numberWords).sort((a, b) => b.length - a.length);
     for (const word of sorted) {
         result = result.replace(new RegExp('\\b' + word + '\\b', 'gi'), numberWords[word]);
@@ -1441,62 +1504,60 @@ function convertSpokenNumbers(text) {
 function parseVoiceCommand(rawText) {
     let text = rawText.toLowerCase().trim();
 
-    // Strip filler words
-    text = text.replace(/\b(um|uh|like|the|a|an|so|okay|hey|please|number|player)\b/g, '').trim();
-    text = text.replace(/\s+/g, ' ');
+    // 1. Detect opponent keywords
+    const isOpponent = /\b(opponent|them|their|other\s*team|opposing)\b/.test(text);
 
-    // Fix common speech-to-text misheard words BEFORE number conversion
-    // "win" is often transcribed as "one" or "1" or "when"
-    text = text.replace(/\b(face\s*off|faceoff)\s+(one|1|want|juan|when)\b/gi, '$1 win');
-    // "caused" is often transcribed as "cost", "calls", "cause"
-    text = text.replace(/\b(cost|calls|cause|caught|called)\s+(turnover|to)\b/gi, 'caused turnover');
+    // 2. Extract player number — prefer explicit digits, use LAST number
+    //    (stat words come first in speech: "goal 7", not "7 goal")
+    let allNumbers = text.match(/\b\d{1,3}\b/g);
+    let playerNumber = allNumbers ? allNumbers[allNumbers.length - 1] : null;
 
-    // Convert spoken numbers to digits
-    text = convertSpokenNumbers(text);
-
-    // Detect opponent
-    const isOpponent = /\b(opponent|them|their|other team|opposing)\b/.test(text);
-    text = text.replace(/\b(opponent|them|their|other team|opposing)\b/g, '').trim();
-
-    // Multi-word stat patterns (check longest first)
-    const statPatterns = [
-        { patterns: ['takeaway', 'take away', 'caused turnover', 'caused to', 'cause turnover', 'ct'], stat: 'caused-turnover' },
-        { patterns: ['ground ball', 'groundball', 'gb'], stat: 'ground-ball' },
-        { patterns: ['faceoff win', 'face off win', 'fo win', 'faceoff won', 'face off won', 'fo won', 'face-off win', 'face-off won'], stat: 'faceoff-won' },
-        { patterns: ['faceoff lost', 'face off lost', 'fo lost', 'faceoff loss', 'face-off lost', 'face off loss'], stat: 'faceoff-lost' },
-        { patterns: ['goal', 'score'], stat: 'goal' },
-        { patterns: ['assist'], stat: 'assist' },
-        { patterns: ['shot'], stat: 'shot' },
-        { patterns: ['turnover', 'to'], stat: 'turnover' },
-        { patterns: ['save'], stat: 'save' },
-        { patterns: ['penalty', 'pen'], stat: 'penalty' },
-    ];
-
-    let matchedStat = null;
-    for (const group of statPatterns) {
-        for (const pattern of group.patterns) {
-            // Use word boundary for short abbreviations to avoid false matches
-            const regex = pattern.length <= 2
-                ? new RegExp('\\b' + pattern + '\\b', 'i')
-                : new RegExp(pattern, 'i');
-            if (regex.test(text)) {
-                matchedStat = group.stat;
-                // Remove matched pattern from text to isolate number
-                text = text.replace(regex, '').trim();
-                break;
-            }
-        }
-        if (matchedStat) break;
+    // 3. If no explicit digits, try converting spelled-out number words
+    if (!playerNumber) {
+        const converted = convertSpokenNumbers(text);
+        allNumbers = converted.match(/\b\d{1,3}\b/g);
+        playerNumber = allNumbers ? allNumbers[allNumbers.length - 1] : null;
     }
 
-    if (!matchedStat) return null;
+    // 4. Strip non-stat text for matching: numbers, filler, opponent words, punctuation
+    let statText = text.replace(/\b\d+\b/g, '');
+    statText = statText.replace(/\b(um|uh|like|the|a|an|so|okay|hey|please|number|player|for|is|it|on|and|at|of|opponent|them|their|other|opposing|team)\b/g, '');
+    statText = statText.replace(/[^a-z\s]/g, '');
+    statText = statText.replace(/\s+/g, ' ').trim();
 
-    // Extract player number from remaining text
-    const numberMatch = text.match(/\b(\d{1,3})\b/);
-    const playerNumber = numberMatch ? numberMatch[1] : null;
+    // 5. Apply word-level aliases (fixes known mishearings before fuzzy match)
+    let words = statText.split(/\s+/).filter(w => w.length > 0);
+    words = words.map(w => VOICE_ALIASES[w] || w);
+
+    if (words.length === 0) return null;
+
+    // 6. Fuzzy match against stat triggers using Levenshtein distance
+    let bestStat = null;
+    let bestDist = Infinity;
+
+    for (let winSize = Math.min(3, words.length); winSize >= 1; winSize--) {
+        for (let i = 0; i <= words.length - winSize; i++) {
+            const candidate = words.slice(i, i + winSize).join(' ');
+
+            for (const trigger of STAT_TRIGGERS) {
+                for (const phrase of trigger.phrases) {
+                    const dist = levenshtein(candidate, phrase);
+                    // Threshold: ~35% of phrase length, minimum 2
+                    const threshold = Math.max(2, Math.ceil(phrase.length * 0.35));
+
+                    if (dist <= threshold && dist < bestDist) {
+                        bestDist = dist;
+                        bestStat = trigger.stat;
+                    }
+                }
+            }
+        }
+    }
+
+    if (!bestStat) return null;
 
     return {
-        stat: matchedStat,
+        stat: bestStat,
         playerNumber: playerNumber,
         isOpponent: isOpponent || !playerNumber
     };
