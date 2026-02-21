@@ -233,11 +233,11 @@ function promptTeamSelection(game, roster) {
     overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 1000; padding: 1rem; display: flex; align-items: center; justify-content: center;';
 
     const container = document.createElement('div');
-    container.style.cssText = 'background: white; border-radius: 12px; padding: 2rem; max-width: 500px; width: 100%;';
+    container.style.cssText = 'background: #1a1a1a; border-radius: 12px; padding: 2rem; max-width: 500px; width: 100%; border: 3px solid #0066FF;';
 
     const title = document.createElement('h3');
     title.textContent = 'Which team are you tracking stats for?';
-    title.style.cssText = 'margin-bottom: 1.5rem; text-align: center;';
+    title.style.cssText = 'margin-bottom: 1.5rem; text-align: center; color: #FFFFFF;';
     container.appendChild(title);
 
     // Home team button
@@ -604,11 +604,11 @@ function promptForAssist(goalScorerId) {
     overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 1000; padding: 1rem; overflow-y: auto;';
 
     const container = document.createElement('div');
-    container.style.cssText = 'background: white; border-radius: 12px; padding: 1.5rem; max-width: 600px; margin: 2rem auto;';
+    container.style.cssText = 'background: #1a1a1a; border-radius: 12px; padding: 1.5rem; max-width: 600px; margin: 2rem auto; border: 3px solid #0066FF;';
 
     const title = document.createElement('h3');
     title.textContent = 'Was there an assist?';
-    title.style.cssText = 'margin-bottom: 1rem; text-align: center;';
+    title.style.cssText = 'margin-bottom: 1rem; text-align: center; color: #FFFFFF;';
     container.appendChild(title);
 
     // Player buttons for assist
