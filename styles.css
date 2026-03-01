@@ -1090,6 +1090,104 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     display: none;
 }
 
+/* ===== GETTING STARTED BANNER ===== */
+
+.getting-started-banner {
+    margin: 0 1.5rem 1.5rem;
+    padding: 1.25rem;
+    background: linear-gradient(135deg, #1e3a5f, #0f2439);
+    border: 2px solid var(--primary-color);
+    border-radius: 12px;
+}
+
+.getting-started-banner h3 {
+    color: white;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+}
+
+.getting-started-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.getting-started-step {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.getting-started-step:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.getting-started-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: var(--primary-color);
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+/* ===== WELCOME MODAL ===== */
+
+.welcome-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+
+.welcome-modal {
+    background: var(--card-bg);
+    border-radius: 16px;
+    padding: 2rem;
+    max-width: 400px;
+    width: 100%;
+    text-align: center;
+}
+
+.welcome-modal h2 {
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.welcome-modal p {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+}
+
+.welcome-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.welcome-actions .btn-primary,
+.welcome-actions .btn-secondary {
+    width: 100%;
+}
+
 /* ===== TEAM LIST / SWITCHER ===== */
 
 .team-list {

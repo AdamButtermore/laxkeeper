@@ -57,6 +57,60 @@ function showSignedInState(user) {
 
     // Populate account section
     updateAccountUI(user);
+
+    // Check if new user — show welcome modal
+    checkNewUser();
+
+    // Update getting started banner visibility
+    updateGettingStartedBanner();
+}
+
+function checkNewUser() {
+    const roster = getRoster();
+    const teams = (typeof LaxSync !== 'undefined' && LaxSync.getUserTeams) ? LaxSync.getUserTeams() : [];
+    const hasSeenWelcome = localStorage.getItem('laxtracular_welcomed');
+
+    if (roster.length === 0 && teams.length === 0 && !hasSeenWelcome) {
+        showWelcomeModal();
+    }
+}
+
+function showWelcomeModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'welcome-overlay';
+    overlay.innerHTML = `
+        <div class="welcome-modal">
+            <h2>Welcome to Laxtracular!</h2>
+            <p>Track lacrosse stats in real-time, manage your roster, and sync data across devices with your team.</p>
+            <div class="welcome-actions">
+                <button class="btn-primary" onclick="dismissWelcome(); showScreen('roster-screen');">Build Your Roster</button>
+                <button class="btn-secondary" onclick="dismissWelcome(); showScreen('settings-screen');">Join a Team with Code</button>
+                <button class="btn-secondary" onclick="dismissWelcome();">Explore on My Own</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+function dismissWelcome() {
+    localStorage.setItem('laxtracular_welcomed', '1');
+    const overlay = document.querySelector('.welcome-overlay');
+    if (overlay) overlay.remove();
+}
+
+function updateGettingStartedBanner() {
+    const banner = document.getElementById('getting-started-banner');
+    if (!banner) return;
+
+    const roster = getRoster();
+    const games = getGames();
+    const teams = (typeof LaxSync !== 'undefined' && LaxSync.getUserTeams) ? LaxSync.getUserTeams() : [];
+
+    // Show banner if user hasn't done at least 2 of the 3 steps
+    const steps = [roster.length > 0, games.length > 0, teams.length > 0];
+    const completed = steps.filter(Boolean).length;
+
+    banner.style.display = completed < 2 ? 'block' : 'none';
 }
 
 function updateAccountUI(user) {

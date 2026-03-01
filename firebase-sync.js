@@ -457,6 +457,18 @@ var LaxSync = (function () {
 
                 loadTeamUI();
                 updateActiveTeamDisplay();
+
+                // Log new team creation for admin notifications
+                var user = firebase.auth().currentUser;
+                db.collection('team_events').add({
+                    type: 'team_created',
+                    teamCode: code,
+                    teamName: teamName,
+                    createdBy: user ? user.displayName || user.email || uid : uid,
+                    createdByEmail: user ? user.email || '' : '',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
                 console.log('[LaxSync] Team created with code:', code);
                 alert('Team created! Your code is: ' + code);
             });

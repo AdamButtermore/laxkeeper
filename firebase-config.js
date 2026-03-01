@@ -102,6 +102,20 @@ function syncUserProfile(user) {
     if (!user) return;
 
     var userRef = firebase.firestore().collection('users').doc(user.uid);
+
+    // Check if this is a brand-new user (doc doesn't exist yet)
+    userRef.get().then(function (doc) {
+        if (!doc.exists) {
+            // New signup — log to signups collection for notifications
+            firebase.firestore().collection('signups').add({
+                uid: user.uid,
+                displayName: user.displayName || '',
+                email: user.email || '',
+                signedUpAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+    });
+
     userRef.set({
         displayName: user.displayName || '',
         email: user.email || '',
