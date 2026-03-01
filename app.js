@@ -1884,7 +1884,6 @@ function showPenaltyTimeSelector(playerId) {
 }
 
 function addPenalty(playerId, playerName, playerNumber, duration) {
-    resumeClockIfGoalPaused();
     // Record penalty stat
     const penTs = recordStatTimestamp();
     if (Array.isArray(currentGame.stats[playerId]['penalty'])) {
@@ -1901,6 +1900,12 @@ function addPenalty(playerId, playerName, playerNumber, duration) {
         duration,
         timeRemaining: duration
     });
+
+    // Stop time: pause clock on penalty
+    if (currentGame.clockType === 'stop' && currentGame.clockRunning) {
+        pauseClock();
+        currentGame.clockPausedForGoal = true; // reuse flag so next stat auto-resumes
+    }
 
     saveCurrentGame();
     updatePenaltyDisplay();
