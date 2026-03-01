@@ -54,6 +54,10 @@
                     <span class="icon">❓</span>
                     <span>Get Started</span>
                 </button>
+                <button class="nav-btn" onclick="showScreen('guide-screen')">
+                    <span class="icon">📖</span>
+                    <span>Stat Guide</span>
+                </button>
                 <button class="nav-btn" onclick="showScreen('roster-screen')">
                     <span class="icon">👥</span>
                     <span>Manage Roster</span>
@@ -247,6 +251,10 @@
                         <button class="stat-btn stat-btn-penalty" onclick="selectStat('penalty')">Penalty</button>
                         <button class="stat-btn" onclick="callTimeout('home')" style="background: #3b82f6; color: white;">Timeout (Us)</button>
                         <button class="stat-btn" onclick="callTimeout('away')" style="background: #f59e0b; color: white;">Timeout (Opp)</button>
+                        <button class="stat-btn" onclick="recordClear('home', true)" style="background: #22c55e; color: white;">Clear</button>
+                        <button class="stat-btn" onclick="recordClear('home', false)" style="background: #ef4444; color: white;">Failed Clear</button>
+                        <button class="stat-btn" onclick="recordClear('away', true)" style="background: #a3e635; color: #1e293b;">Opp Clear</button>
+                        <button class="stat-btn" onclick="recordClear('away', false)" style="background: #fb923c; color: white;">Opp Failed Clear</button>
                     </div>
                 </div>
 
@@ -361,51 +369,20 @@
                 </div>
             </div>
         </div>
-        <!-- About / How to Use Screen -->
-        <div id="about-screen" class="screen">
+        <!-- Scorekeeper's Stat Guide Screen -->
+        <div id="guide-screen" class="screen">
             <header>
                 <button class="back-btn" onclick="showScreen('home-screen')">← Back</button>
-                <h2>Get Started with Laxtracular</h2>
+                <h2>Stat Guide</h2>
             </header>
 
             <div class="about-content">
-                <!-- Hero -->
                 <div class="about-hero">
-                    <h1>Laxtracular</h1>
-                    <p class="about-tagline">Your timekeeper, scorekeeper, and spotter — all in one app.</p>
+                    <h1>Scorekeeper's Guide</h1>
+                    <p class="about-tagline">What every stat means and how to call it — based on NFHS and USA Lacrosse official guidelines.</p>
                 </div>
 
-                <!-- The Problem -->
                 <div class="about-section">
-                    <div class="about-section-icon">🥍</div>
-                    <h3>Why Laxtracular?</h3>
-                    <div class="about-card">
-                        <h4>The Volunteer Problem</h4>
-                        <p>Running a lacrosse game table is surprisingly complex. You need <strong>three trained volunteers</strong> just to cover the basics:</p>
-                        <ul class="about-list">
-                            <li><strong>Timekeeper</strong> — managing the game clock, stopping for goals, timeouts, and penalties, tracking penalty release times, and handling period transitions</li>
-                            <li><strong>Scorekeeper</strong> — logging every goal, assist, and penalty with the correct player, period, and time on the book</li>
-                            <li><strong>Spotter</strong> — calling out jersey numbers and play details to the scorekeeper in real time</li>
-                        </ul>
-                        <p>Finding three people who know the rules well enough to do this — for <em>every</em> game — is one of the biggest headaches in youth and club lacrosse.</p>
-                    </div>
-                    <div class="about-card about-card-highlight-green">
-                        <h4>One App, One Person</h4>
-                        <p>Laxtracular combines all three roles into a single, easy-to-use app that one parent or coach can run from the sideline.</p>
-                        <ul class="about-list">
-                            <li><strong>Timekeeping is automatic</strong> — the clock starts and stops in context with the game. It pauses on goals, timeouts, and penalties, tracks penalty countdown timers, and resumes when play continues. No more forgetting to stop or restart the clock.</li>
-                            <li><strong>Spotting and scorekeeping are combined</strong> — voice input lets you call out stats naturally ("Goal 12", "Ground ball 22") without taking your eyes off the field. The app handles the rest: logging the player, the stat, the period, and the exact clock time.</li>
-                            <li><strong>You can actually watch your kid play</strong> — instead of staring at a paper scorebook, you speak into your phone and stay focused on the game.</li>
-                        </ul>
-                    </div>
-                </div>
-
-                <!-- Scorekeeper's Guide to Lacrosse Stats -->
-                <div class="about-section">
-                    <div class="about-section-icon">📖</div>
-                    <h3>Scorekeeper's Guide to Lacrosse Stats</h3>
-                    <p class="about-intro">New to the score table? Here's what every stat means and how to call it — based on <strong>NFHS</strong> and <strong>USA Lacrosse</strong> official guidelines.</p>
-
                     <div class="about-card">
                         <h4>Goal (G)</h4>
                         <p>A goal is scored when a shot crosses the goal line completely. Record the <strong>player's number</strong>, the <strong>period</strong>, and the <strong>time remaining</strong>.</p>
@@ -471,11 +448,17 @@
                     </div>
 
                     <div class="about-card about-card-highlight-blue">
-                        <h4>Team Stats (Post-Game)</h4>
-                        <p>These stats are tracked at the team level, not per player. Enter them in <strong>Edit Stats</strong> after the game.</p>
+                        <h4>Team Stats</h4>
+                        <p>These stats are tracked at the team level, not per player. Clears can be recorded live with tap or voice; EMO and PK are entered post-game in <strong>Edit Stats</strong>.</p>
                         <div class="about-detail"><strong>Clears / Failed Clears:</strong> A clear is when the defensive team successfully advances the ball past the midfield restraining line to start an offensive possession. A failed clear means the team lost possession before getting it across — which also counts as a turnover. <strong>Clearing %</strong> = Successful Clears / Total Clear Attempts.</div>
                         <div class="about-detail"><strong>Man-Up / EMO (Extra Man Offense):</strong> When the opponent has a player in the penalty box, your team is "man-up." An EMO opportunity is each penalty situation; an EMO goal is a goal scored during that advantage. <strong>Man-Up %</strong> = EMO Goals / EMO Opportunities.</div>
                         <div class="about-detail"><strong>Penalty Kill (Man-Down Defense):</strong> When your team has a player in the box, you're killing a penalty. A successful kill means the opponent <strong>doesn't</strong> score during their man-up. <strong>PK %</strong> = Successful Kills / PK Opportunities.</div>
+                    </div>
+
+                    <div class="about-card">
+                        <h4>Penalty Minutes (PIM)</h4>
+                        <p>The total time a player has spent in the penalty box across all penalties. Laxtracular calculates this automatically from penalty durations.</p>
+                        <div class="about-detail">Under NFHS rules, a player who accumulates <strong>5 minutes of personal fouls</strong> has fouled out of the game. Technical fouls do not count toward this limit.</div>
                     </div>
 
                     <div class="about-tip">
@@ -490,6 +473,47 @@
                             <li><a href="https://assets.nfhs.org/umbraco/media/7213508/nfhs-boys-lacrosse-official-timer-guidelines.pdf" target="_blank" rel="noopener" style="color: #3b82f6; text-decoration: underline;">NFHS Boys Lacrosse Official Timer Guidelines (PDF)</a></li>
                             <li><a href="https://www.usalacrosse.com/officials-resource-library" target="_blank" rel="noopener" style="color: #3b82f6; text-decoration: underline;">USA Lacrosse Officials Resource Library</a></li>
                             <li><a href="https://www.usalacrosse.com/boys-and-mens-rules" target="_blank" rel="noopener" style="color: #3b82f6; text-decoration: underline;">USA Lacrosse Boys' and Men's Rules</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- About / How to Use Screen -->
+        <div id="about-screen" class="screen">
+            <header>
+                <button class="back-btn" onclick="showScreen('home-screen')">← Back</button>
+                <h2>Get Started with Laxtracular</h2>
+            </header>
+
+            <div class="about-content">
+                <!-- Hero -->
+                <div class="about-hero">
+                    <h1>Laxtracular</h1>
+                    <p class="about-tagline">Your timekeeper, scorekeeper, and spotter — all in one app.</p>
+                </div>
+
+                <!-- The Problem -->
+                <div class="about-section">
+                    <div class="about-section-icon">🥍</div>
+                    <h3>Why Laxtracular?</h3>
+                    <div class="about-card">
+                        <h4>The Volunteer Problem</h4>
+                        <p>Running a lacrosse game table is surprisingly complex. You need <strong>three trained volunteers</strong> just to cover the basics:</p>
+                        <ul class="about-list">
+                            <li><strong>Timekeeper</strong> — managing the game clock, stopping for goals, timeouts, and penalties, tracking penalty release times, and handling period transitions</li>
+                            <li><strong>Scorekeeper</strong> — logging every goal, assist, and penalty with the correct player, period, and time on the book</li>
+                            <li><strong>Spotter</strong> — calling out jersey numbers and play details to the scorekeeper in real time</li>
+                        </ul>
+                        <p>Finding three people who know the rules well enough to do this — for <em>every</em> game — is one of the biggest headaches in youth and club lacrosse.</p>
+                    </div>
+                    <div class="about-card about-card-highlight-green">
+                        <h4>One App, One Person</h4>
+                        <p>Laxtracular combines all three roles into a single, easy-to-use app that one parent or coach can run from the sideline.</p>
+                        <ul class="about-list">
+                            <li><strong>Timekeeping is automatic</strong> — the clock starts and stops in context with the game. It pauses on goals, timeouts, and penalties, tracks penalty countdown timers, and resumes when play continues. No more forgetting to stop or restart the clock.</li>
+                            <li><strong>Spotting and scorekeeping are combined</strong> — voice input lets you call out stats naturally ("Goal 12", "Ground ball 22") without taking your eyes off the field. The app handles the rest: logging the player, the stat, the period, and the exact clock time.</li>
+                            <li><strong>You can actually watch your kid play</strong> — instead of staring at a paper scorebook, you speak into your phone and stay focused on the game.</li>
                         </ul>
                     </div>
                 </div>

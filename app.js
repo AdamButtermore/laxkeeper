@@ -37,6 +37,20 @@ function formatClockTime(totalSeconds) {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
+// Get total penalty minutes from a penalty stat value (array of entries with duration, or number)
+function getPenaltyMinutes(val) {
+    if (!Array.isArray(val)) return 0;
+    return val.reduce((sum, entry) => sum + (entry.duration || 0), 0);
+}
+
+// Format penalty seconds as M:SS for display
+function formatPIM(totalSeconds) {
+    if (totalSeconds === 0) return '0:00';
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {
     // Wait for Firebase auth before loading data
@@ -443,6 +457,7 @@ function initializeGame(game, roster, trackingTeam, trackingTeamName) {
             away: Array(game.format === 'quarters' ? 4 : 2).fill(0)
         },
         activePenalties: [], // Array of {playerId, playerName, duration, timeRemaining}
+        clears: [], // Array of {team, teamName, success, period, time, timeRemaining}
         trackingTeam: trackingTeam, // 'home' or 'away'
         trackingTeamName: trackingTeamName,
         startedAt: new Date().toISOString()
@@ -698,6 +713,32 @@ function updateTimeoutDisplay() {
     }
     html += '</div>';
     container.innerHTML = html;
+}
+
+// ===== CLEARS =====
+function recordClear(team, success) {
+    if (!currentGame) return;
+
+    if (!currentGame.clears) currentGame.clears = [];
+
+    const ts = recordStatTimestamp();
+    const teamName = team === 'home'
+        ? (localStorage.getItem(STORAGE_KEYS.TEAM_NAME) || 'Home')
+        : currentGame.opponent;
+
+    currentGame.clears.push({
+        team: team,
+        teamName: teamName,
+        success: success,
+        ...ts
+    });
+
+    resumeClockIfGoalPaused();
+    saveCurrentGame();
+
+    const label = success ? 'Clear' : 'Failed Clear';
+    showVoiceFeedback('Recorded!', `${teamName} — ${label}`);
+    setTimeout(hideVoiceFeedback, 1500);
 }
 
 // ===== STAT & PLAYER SELECTION =====
@@ -1385,6 +1426,7 @@ function viewGameStats(gameId) {
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Takeaways</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Saves</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Penalties</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">PIM</th>
                     </tr>
                 </thead>
                 <tbody>`;
@@ -1407,7 +1449,8 @@ function viewGameStats(gameId) {
             gb: getStatCount(stats['ground-ball']), fow, fol,
             foPct: (fow + fol) > 0 ? Math.round(fow / (fow + fol) * 100) : -1,
             to: getStatCount(stats.turnover), ta: getStatCount(stats['caused-turnover']),
-            sv: getStatCount(stats.save), pen: getStatCount(stats.penalty)
+            sv: getStatCount(stats.save), pen: getStatCount(stats.penalty),
+            pim: getPenaltyMinutes(stats.penalty)
         });
     });
 
@@ -1438,31 +1481,57 @@ function viewGameStats(gameId) {
                 <td style="padding: 0.5rem; text-align: center; ${grn(r.ta,'ta')}">${r.ta}</td>
                 <td style="padding: 0.5rem; text-align: center; ${grn(r.sv,'sv')}">${r.sv}</td>
                 <td style="padding: 0.5rem; text-align: center;">${r.pen}</td>
+                <td style="padding: 0.5rem; text-align: center;">${r.pim > 0 ? formatPIM(r.pim) : '-'}</td>
             </tr>`;
     });
 
     if (playerRows.length === 0) {
-        statsHtml += `<tr><td colspan="14" style="padding: 1rem; text-align: center; color: #64748b; font-style: italic;">No stats recorded</td></tr>`;
+        statsHtml += `<tr><td colspan="15" style="padding: 1rem; text-align: center; color: #64748b; font-style: italic;">No stats recorded</td></tr>`;
     }
 
     statsHtml += `</tbody></table></div>`;
 
     // === TEAM STATS (clears, EMO, PK) ===
-    if (game.teamStats) {
-        const ts = game.teamStats;
+    // Merge live-tracked clears with post-game teamStats
+    const liveClears = game.clears || [];
+    const ts = game.teamStats || {};
+    const clrSuccess = liveClears.length > 0
+        ? liveClears.filter(c => c.team === (game.trackingTeam || 'home') && c.success).length
+        : (ts.clearsSuccess || 0);
+    const clrFail = liveClears.length > 0
+        ? liveClears.filter(c => c.team === (game.trackingTeam || 'home') && !c.success).length
+        : (ts.clearsFail || 0);
+    const oppClrSuccess = liveClears.length > 0
+        ? liveClears.filter(c => c.team !== (game.trackingTeam || 'home') && c.success).length
+        : (ts.oppClearsSuccess || 0);
+    const oppClrFail = liveClears.length > 0
+        ? liveClears.filter(c => c.team !== (game.trackingTeam || 'home') && !c.success).length
+        : (ts.oppClearsFail || 0);
+
+    const hasClears = (clrSuccess + clrFail + oppClrSuccess + oppClrFail) > 0;
+    const hasEMO = (ts.emoOpportunities || 0) > 0 || (ts.emoGoals || 0) > 0;
+    const hasPK = (ts.pkOpportunities || 0) > 0;
+
+    if (hasClears || hasEMO || hasPK) {
         const pct = (num, den) => den > 0 ? Math.round(num / den * 100) + '%' : '-';
-        const clrTotal = ts.clearsSuccess + ts.clearsFail;
-        const oppClrTotal = ts.oppClearsSuccess + ts.oppClearsFail;
-        const pkSuccessful = ts.pkOpportunities - ts.pkGoalsAgainst;
+        const clrTotal = clrSuccess + clrFail;
+        const oppClrTotal = oppClrSuccess + oppClrFail;
+        const pkSuccessful = (ts.pkOpportunities || 0) - (ts.pkGoalsAgainst || 0);
 
         statsHtml += '<div style="margin-top: 1.5rem; padding: 1rem; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">';
         statsHtml += '<h4 style="color: #1e293b; margin-bottom: 0.75rem;">Team Stats</h4>';
         statsHtml += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.9rem;">';
 
-        statsHtml += `<div><strong>Clearing:</strong> ${ts.clearsSuccess}/${clrTotal} (${pct(ts.clearsSuccess, clrTotal)})</div>`;
-        statsHtml += `<div><strong>Opp Clearing:</strong> ${ts.oppClearsSuccess}/${oppClrTotal} (${pct(ts.oppClearsSuccess, oppClrTotal)})</div>`;
-        statsHtml += `<div><strong>Man-Up (EMO):</strong> ${ts.emoGoals}/${ts.emoOpportunities} (${pct(ts.emoGoals, ts.emoOpportunities)})</div>`;
-        statsHtml += `<div><strong>Penalty Kill:</strong> ${pkSuccessful >= 0 ? pkSuccessful : 0}/${ts.pkOpportunities} (${pct(pkSuccessful >= 0 ? pkSuccessful : 0, ts.pkOpportunities)})</div>`;
+        if (hasClears) {
+            statsHtml += `<div><strong>Clearing:</strong> ${clrSuccess}/${clrTotal} (${pct(clrSuccess, clrTotal)})</div>`;
+            statsHtml += `<div><strong>Opp Clearing:</strong> ${oppClrSuccess}/${oppClrTotal} (${pct(oppClrSuccess, oppClrTotal)})</div>`;
+        }
+        if (hasEMO) {
+            statsHtml += `<div><strong>Man-Up (EMO):</strong> ${ts.emoGoals || 0}/${ts.emoOpportunities || 0} (${pct(ts.emoGoals || 0, ts.emoOpportunities || 0)})</div>`;
+        }
+        if (hasPK) {
+            statsHtml += `<div><strong>Penalty Kill:</strong> ${pkSuccessful >= 0 ? pkSuccessful : 0}/${ts.pkOpportunities || 0} (${pct(pkSuccessful >= 0 ? pkSuccessful : 0, ts.pkOpportunities || 0)})</div>`;
+        }
 
         statsHtml += '</div></div>';
     }
@@ -1542,6 +1611,24 @@ function viewGameStats(gameId) {
                     statKey: 'timeout',
                     isGoal: false,
                     isOpponent: to.team !== game.trackingTeam
+                });
+            }
+        });
+    }
+
+    // Collect clear events
+    if (game.clears) {
+        game.clears.forEach(cl => {
+            if (cl.period) {
+                gameLogEvents.push({
+                    period: cl.period,
+                    time: cl.time || '',
+                    timeRemaining: cl.timeRemaining != null ? cl.timeRemaining : 0,
+                    label: cl.teamName || (cl.team === 'home' ? 'Home' : 'Away'),
+                    stat: cl.success ? 'Clear' : 'Failed Clear',
+                    statKey: cl.success ? 'clear' : 'failed-clear',
+                    isGoal: false,
+                    isOpponent: cl.team !== game.trackingTeam
                 });
             }
         });
@@ -1735,8 +1822,24 @@ function loadSeasonSummary() {
     html += `</tbody></table></div></div>`;
 
     // ========== TEAM STATS (Clears, EMO, PK) ==========
-    const gamesWithTeamStats = sortedGames.filter(g => g.teamStats);
-    if (gamesWithTeamStats.length > 0) {
+    // Helper: get clear counts from a game (live clears take precedence over post-game entry)
+    function getGameClears(game) {
+        const lc = game.clears || [];
+        const ts = game.teamStats || {};
+        const tracking = game.trackingTeam || 'home';
+        if (lc.length > 0) {
+            return {
+                cs: lc.filter(c => c.team === tracking && c.success).length,
+                cf: lc.filter(c => c.team === tracking && !c.success).length,
+                ocs: lc.filter(c => c.team !== tracking && c.success).length,
+                ocf: lc.filter(c => c.team !== tracking && !c.success).length
+            };
+        }
+        return { cs: ts.clearsSuccess || 0, cf: ts.clearsFail || 0, ocs: ts.oppClearsSuccess || 0, ocf: ts.oppClearsFail || 0 };
+    }
+
+    const gamesWithTeamData = sortedGames.filter(g => g.teamStats || (g.clears && g.clears.length > 0));
+    if (gamesWithTeamData.length > 0) {
         const tsTh = 'padding: 0.6rem 0.5rem; text-align: center; font-weight: 700;';
         const tsTd = 'padding: 0.6rem 0.5rem; text-align: center; color: var(--text-primary);';
         const tsStickyTh = tsTh + ' text-align: left; position: sticky; left: 0; z-index: 1;';
@@ -1756,11 +1859,13 @@ function loadSeasonSummary() {
         html += `<th style="${tsTh}">PK</th><th style="${tsTh}">PK%</th>`;
         html += `</tr></thead><tbody>`;
 
-        // Season accumulators
         const tsTotals = { cs: 0, cf: 0, ocs: 0, ocf: 0, emoOpp: 0, emoG: 0, pkOpp: 0, pkGA: 0 };
 
         sortedGames.forEach((game, i) => {
-            const ts = game.teamStats;
+            const ts = game.teamStats || {};
+            const cl = getGameClears(game);
+            const hasData = (cl.cs + cl.cf + cl.ocs + cl.ocf) > 0 || ts.emoOpportunities || ts.pkOpportunities;
+
             const date = new Date(game.completedAt || game.datetime);
             const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
             const result = game.homeScore > game.awayScore ? 'W' : game.homeScore < game.awayScore ? 'L' : 'T';
@@ -1768,31 +1873,34 @@ function loadSeasonSummary() {
             const label = `<span style="color: ${resultColor}; font-weight: 700;">${result}</span> vs ${game.opponent}<br><span style="font-size: 0.75rem; color: var(--text-secondary);">${dateStr}</span>`;
             const bg = i % 2 === 0 ? '' : 'rgba(255,255,255,0.02)';
 
-            if (ts) {
-                const clrT = ts.clearsSuccess + ts.clearsFail;
-                const oClrT = ts.oppClearsSuccess + ts.oppClearsFail;
-                const pkOk = ts.pkOpportunities - ts.pkGoalsAgainst;
-                tsTotals.cs += ts.clearsSuccess; tsTotals.cf += ts.clearsFail;
-                tsTotals.ocs += ts.oppClearsSuccess; tsTotals.ocf += ts.oppClearsFail;
-                tsTotals.emoOpp += ts.emoOpportunities; tsTotals.emoG += ts.emoGoals;
-                tsTotals.pkOpp += ts.pkOpportunities; tsTotals.pkGA += ts.pkGoalsAgainst;
+            if (hasData) {
+                const clrT = cl.cs + cl.cf;
+                const oClrT = cl.ocs + cl.ocf;
+                const emoO = ts.emoOpportunities || 0;
+                const emoG = ts.emoGoals || 0;
+                const pkO = ts.pkOpportunities || 0;
+                const pkGA = ts.pkGoalsAgainst || 0;
+                const pkOk = pkO - pkGA;
+                tsTotals.cs += cl.cs; tsTotals.cf += cl.cf;
+                tsTotals.ocs += cl.ocs; tsTotals.ocf += cl.ocf;
+                tsTotals.emoOpp += emoO; tsTotals.emoG += emoG;
+                tsTotals.pkOpp += pkO; tsTotals.pkGA += pkGA;
 
                 html += `<tr style="border-bottom: 1px solid var(--border-color); ${bg ? 'background:' + bg + ';' : ''}">`;
                 html += `<td style="${tsStickyTd} ${bg ? 'background:' + bg + ';' : ''}">${label}</td>`;
-                html += `<td style="${tsTd}">${frac(ts.clearsSuccess, clrT)}</td><td style="${tsTd}">${pct(ts.clearsSuccess, clrT)}</td>`;
-                html += `<td style="${tsTd}">${frac(ts.oppClearsSuccess, oClrT)}</td><td style="${tsTd}">${pct(ts.oppClearsSuccess, oClrT)}</td>`;
-                html += `<td style="${tsTd}">${frac(ts.emoGoals, ts.emoOpportunities)}</td><td style="${tsTd}">${pct(ts.emoGoals, ts.emoOpportunities)}</td>`;
-                html += `<td style="${tsTd}">${frac(pkOk >= 0 ? pkOk : 0, ts.pkOpportunities)}</td><td style="${tsTd}">${pct(pkOk >= 0 ? pkOk : 0, ts.pkOpportunities)}</td>`;
+                html += `<td style="${tsTd}">${frac(cl.cs, clrT)}</td><td style="${tsTd}">${pct(cl.cs, clrT)}</td>`;
+                html += `<td style="${tsTd}">${frac(cl.ocs, oClrT)}</td><td style="${tsTd}">${pct(cl.ocs, oClrT)}</td>`;
+                html += `<td style="${tsTd}">${frac(emoG, emoO)}</td><td style="${tsTd}">${pct(emoG, emoO)}</td>`;
+                html += `<td style="${tsTd}">${frac(pkOk >= 0 ? pkOk : 0, pkO)}</td><td style="${tsTd}">${pct(pkOk >= 0 ? pkOk : 0, pkO)}</td>`;
                 html += `</tr>`;
             } else {
                 html += `<tr style="border-bottom: 1px solid var(--border-color); ${bg ? 'background:' + bg + ';' : ''}">`;
                 html += `<td style="${tsStickyTd} ${bg ? 'background:' + bg + ';' : ''}">${label}</td>`;
-                html += `<td style="${tsTd}" colspan="8" style="color: var(--text-secondary); font-style: italic;">—</td>`;
+                html += `<td style="${tsTd}" colspan="8">—</td>`;
                 html += `</tr>`;
             }
         });
 
-        // Season totals row
         const sClrT = tsTotals.cs + tsTotals.cf;
         const sOClrT = tsTotals.ocs + tsTotals.ocf;
         const sPkOk = tsTotals.pkOpp - tsTotals.pkGA;
@@ -1814,7 +1922,7 @@ function loadSeasonSummary() {
             player, gamesPlayed: 0,
             totalGoals: 0, totalAssists: 0, totalPoints: 0, totalShots: 0,
             totalGroundBalls: 0, totalFaceoffWon: 0, totalFaceoffLost: 0,
-            totalTurnovers: 0, totalCausedTurnovers: 0, totalSaves: 0, totalPenalties: 0
+            totalTurnovers: 0, totalCausedTurnovers: 0, totalSaves: 0, totalPenalties: 0, totalPIM: 0
         };
     });
 
@@ -1835,6 +1943,7 @@ function loadSeasonSummary() {
             ss.totalCausedTurnovers += getStatCount(ps['caused-turnover']);
             ss.totalSaves += getStatCount(ps.save);
             ss.totalPenalties += getStatCount(ps.penalty);
+            ss.totalPIM += getPenaltyMinutes(ps.penalty);
         });
     });
 
@@ -1853,7 +1962,7 @@ function loadSeasonSummary() {
         <th style="${thStyle}">GP</th><th style="${thStyle}">G</th><th style="${thStyle}">A</th><th style="${thStyle}">Pts</th>
         <th style="${thStyle}">Sh</th><th style="${thStyle}">Sh%</th><th style="${thStyle}">GB</th>
         <th style="${thStyle}">FOW</th><th style="${thStyle}">FOL</th><th style="${thStyle}">FO%</th>
-        <th style="${thStyle}">TO</th><th style="${thStyle}">TA</th><th style="${thStyle}">Sv</th><th style="${thStyle}">Pen</th>
+        <th style="${thStyle}">TO</th><th style="${thStyle}">TA</th><th style="${thStyle}">Sv</th><th style="${thStyle}">Pen</th><th style="${thStyle}">PIM</th>
     </tr></thead><tbody>`;
 
     // Green highlighting
@@ -1887,6 +1996,7 @@ function loadSeasonSummary() {
             <td style="${tdStyle} ${grn(s.totalCausedTurnovers,'totalCausedTurnovers')}">${s.totalCausedTurnovers}</td>
             <td style="${tdStyle} ${grn(s.totalSaves,'totalSaves')}">${s.totalSaves}</td>
             <td style="${tdStyle}">${s.totalPenalties}</td>
+            <td style="${tdStyle}">${s.totalPIM > 0 ? formatPIM(s.totalPIM) : '-'}</td>
         </tr>`;
     });
 
@@ -2309,8 +2419,9 @@ function showPenaltyTimeSelector(playerId) {
 }
 
 function addPenalty(playerId, playerName, playerNumber, duration) {
-    // Record penalty stat
+    // Record penalty stat (include duration for PIM tracking)
     const penTs = recordStatTimestamp();
+    penTs.duration = duration;
     if (Array.isArray(currentGame.stats[playerId]['penalty'])) {
         currentGame.stats[playerId]['penalty'].push(penTs);
     } else {
@@ -2542,15 +2653,22 @@ const VOICE_ALIASES = {
     // Turnover / Takeaway
     'turnovers': 'turnover',
     'takeaways': 'takeaway',
+    // Clear helpers
+    'cleared': 'clear', 'clears': 'clear', 'claire': 'clear', 'kleer': 'clear',
+    'failed': 'failed', 'fail': 'failed', 'fell': 'failed',
 };
 
 // Stat trigger phrases — multi-word first (higher priority)
 const STAT_TRIGGERS = [
+    { phrases: ['failed clear'], stat: 'failed-clear' },
+    { phrases: ['opponent failed clear', 'opp failed clear'], stat: 'opp-failed-clear' },
+    { phrases: ['opponent clear', 'opp clear'], stat: 'opp-clear' },
     { phrases: ['ground ball'], stat: 'ground-ball' },
     { phrases: ['faceoff win', 'face off win'], stat: 'faceoff-won' },
     { phrases: ['faceoff lost', 'face off lost', 'faceoff loss', 'face off loss'], stat: 'faceoff-lost' },
     { phrases: ['takeaway', 'take away'], stat: 'caused-turnover' },
     { phrases: ['turnover', 'turn over'], stat: 'turnover' },
+    { phrases: ['clear'], stat: 'clear' },
     { phrases: ['goal', 'score'], stat: 'goal' },
     { phrases: ['assist'], stat: 'assist' },
     { phrases: ['shot'], stat: 'shot' },
@@ -2652,6 +2770,24 @@ function executeVoiceCommand(parsed) {
     if (!currentGame) {
         showVoiceFeedback('No active game', 'Start a game first');
         setTimeout(hideVoiceFeedback, 2000);
+        return;
+    }
+
+    // Handle clear commands (team-level, no player needed)
+    if (parsed.stat === 'clear') {
+        recordClear('home', true);
+        return;
+    }
+    if (parsed.stat === 'failed-clear') {
+        recordClear('home', false);
+        return;
+    }
+    if (parsed.stat === 'opp-clear') {
+        recordClear('away', true);
+        return;
+    }
+    if (parsed.stat === 'opp-failed-clear') {
+        recordClear('away', false);
         return;
     }
 
