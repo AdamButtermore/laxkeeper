@@ -45,22 +45,8 @@
                 </div>
             </header>
 
-            <div id="getting-started-banner" class="getting-started-banner" style="display: none;">
-                <h3>Welcome! Here's how to get started:</h3>
-                <div class="getting-started-steps">
-                    <div class="getting-started-step" onclick="showScreen('roster-screen')">
-                        <span class="getting-started-number">1</span>
-                        <span>Add players to your roster</span>
-                    </div>
-                    <div class="getting-started-step" onclick="showScreen('schedule-screen')">
-                        <span class="getting-started-number">2</span>
-                        <span>Schedule your first game</span>
-                    </div>
-                    <div class="getting-started-step" onclick="showScreen('settings-screen')">
-                        <span class="getting-started-number">3</span>
-                        <span>Create or join a team to sync across devices</span>
-                    </div>
-                </div>
+            <div id="getting-started-banner" class="getting-started-banner" onclick="showScreen('about-screen')" style="cursor: pointer;">
+                <h3>New here? Tap to get started with Laxtracular →</h3>
             </div>
 
             <nav class="main-nav">
@@ -87,6 +73,10 @@
                 <button class="nav-btn" onclick="showScreen('settings-screen')">
                     <span class="icon">⚙️</span>
                     <span>Settings</span>
+                </button>
+                <button class="nav-btn" onclick="showScreen('about-screen')">
+                    <span class="icon">❓</span>
+                    <span>Get Started</span>
                 </button>
             </nav>
         </div>
@@ -367,6 +357,236 @@
                 <div class="settings-section danger-zone">
                     <h3>Danger Zone</h3>
                     <button class="btn-danger" onclick="clearAllData()">Clear All Data</button>
+                </div>
+            </div>
+        </div>
+        <!-- About / How to Use Screen -->
+        <div id="about-screen" class="screen">
+            <header>
+                <button class="back-btn" onclick="showScreen('home-screen')">← Back</button>
+                <h2>Get Started with Laxtracular</h2>
+            </header>
+
+            <div class="about-content">
+                <!-- Hero -->
+                <div class="about-hero">
+                    <h1>Laxtracular</h1>
+                    <p class="about-tagline">Real-time lacrosse stats, built for the sideline.</p>
+                </div>
+
+                <!-- Quick Start -->
+                <div class="about-section">
+                    <div class="about-section-icon">🚀</div>
+                    <h3>Quick Start</h3>
+                    <div class="about-steps">
+                        <div class="about-step">
+                            <span class="about-step-num">1</span>
+                            <div>
+                                <strong>Build your roster</strong>
+                                <p>Add players with name, number, and position.</p>
+                            </div>
+                        </div>
+                        <div class="about-step">
+                            <span class="about-step-num">2</span>
+                            <div>
+                                <strong>Schedule a game</strong>
+                                <p>Set opponent, date, format (quarters/halves), period length, and clock type.</p>
+                            </div>
+                        </div>
+                        <div class="about-step">
+                            <span class="about-step-num">3</span>
+                            <div>
+                                <strong>Track live stats</strong>
+                                <p>Tap stats and players during the game. Everything is saved automatically.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stat Input -->
+                <div class="about-section">
+                    <div class="about-section-icon">👆</div>
+                    <h3>Recording Stats</h3>
+                    <div class="about-card">
+                        <h4>Tap Input</h4>
+                        <p>Select a stat type (Goal, Shot, Ground Ball, etc.) then tap the player who earned it. For opponent stats, tap the <strong>Opponent Team</strong> button instead of a player.</p>
+                        <div class="about-detail">
+                            <span class="about-badge">Goals</span> automatically record a shot and increment the score.
+                        </div>
+                        <div class="about-detail">
+                            <span class="about-badge">Assists</span> are prompted immediately after a goal — pick the assisting player or tap "No Assist."
+                        </div>
+                        <div class="about-detail">
+                            <span class="about-badge">Penalties</span> prompt for duration (30s to 3 min) and start a live countdown timer on the scoreboard.
+                        </div>
+                    </div>
+                    <div class="about-card">
+                        <h4>Voice Input</h4>
+                        <p>Tap the microphone button on the right side of the scoreboard and speak naturally.</p>
+                        <div class="about-examples">
+                            <code>"Goal 12"</code>
+                            <code>"Shot 7"</code>
+                            <code>"Ground ball 22"</code>
+                            <code>"Opponent goal"</code>
+                            <code>"Save 1"</code>
+                            <code>"Faceoff win 14"</code>
+                            <code>"Takeaway 8"</code>
+                        </div>
+                        <p>Voice input uses fuzzy matching and handles common mishearings — you don't need to be exact. An undo button appears after each voice command in case of errors.</p>
+                    </div>
+                </div>
+
+                <!-- Clock Modes -->
+                <div class="about-section">
+                    <div class="about-section-icon">⏱️</div>
+                    <h3>Clock Modes</h3>
+                    <p class="about-intro">When scheduling a game, choose between two clock behaviors:</p>
+                    <div class="about-card-grid">
+                        <div class="about-card about-card-highlight-blue">
+                            <h4>Stop Time</h4>
+                            <p>The clock automatically pauses when:</p>
+                            <ul>
+                                <li>A <strong>goal</strong> is scored (either team)</li>
+                                <li>A <strong>penalty</strong> is called</li>
+                                <li>A <strong>timeout</strong> is taken</li>
+                            </ul>
+                            <p>The clock automatically <strong>resumes</strong> when the next stat is recorded — so you never have to remember to restart it.</p>
+                        </div>
+                        <div class="about-card about-card-highlight-green">
+                            <h4>Running Time</h4>
+                            <p>The clock runs continuously. The only automatic stoppage is for <strong>timeouts</strong>.</p>
+                            <p>After a timeout, the clock resumes on the next stat — just like stop time.</p>
+                        </div>
+                    </div>
+                    <div class="about-tip">
+                        <strong>Tip:</strong> If you manually pause/resume the clock, the auto-resume behavior is cleared — so manual control always takes priority.
+                    </div>
+                </div>
+
+                <!-- Timeouts -->
+                <div class="about-section">
+                    <div class="about-section-icon">🤚</div>
+                    <h3>Timeouts</h3>
+                    <p>Two timeout buttons sit in the stat grid: <strong>Timeout (Us)</strong> and <strong>Timeout (Opp)</strong>. Tapping either one:</p>
+                    <ul class="about-list">
+                        <li>Immediately pauses the clock</li>
+                        <li>Logs the timeout with the period and clock time</li>
+                        <li>Shows a running count under the scoreboard</li>
+                    </ul>
+                    <p>Timeouts appear in the post-game Game Log alongside all other events.</p>
+                </div>
+
+                <!-- Timestamps & Game Log -->
+                <div class="about-section">
+                    <div class="about-section-icon">📋</div>
+                    <h3>Timestamps & Game Log</h3>
+                    <p>Every stat is recorded with the <strong>period</strong> and <strong>clock time</strong> from when it happened. This powers three post-game views:</p>
+                    <div class="about-card">
+                        <h4>Box Score</h4>
+                        <p>A period-by-period score breakdown showing exactly how the game unfolded. Shown at the top of View Stats for completed games.</p>
+                    </div>
+                    <div class="about-card">
+                        <h4>Scoring Summary</h4>
+                        <p>A focused list of only goals and assists in chronological order — see who scored, who assisted, and when.</p>
+                    </div>
+                    <div class="about-card">
+                        <h4>Game Log</h4>
+                        <p>Every event in the game listed chronologically — goals, assists, shots, ground balls, penalties, timeouts, and more.</p>
+                    </div>
+                </div>
+
+                <!-- Score & Stats -->
+                <div class="about-section">
+                    <div class="about-section-icon">📊</div>
+                    <h3>Score & Season Stats</h3>
+                    <div class="about-card">
+                        <h4>Live Score</h4>
+                        <p>Goals automatically update the score. You can also manually adjust with the <strong>+/−</strong> buttons on the scoreboard (for missed calls, corrections, etc.).</p>
+                    </div>
+                    <div class="about-card">
+                        <h4>Season Summary</h4>
+                        <p>Aggregates every player's stats across all completed games — totals, shooting percentage, faceoff win rate, per-game averages, and more. Leaders are highlighted in green.</p>
+                    </div>
+                    <div class="about-card">
+                        <h4>Edit Stats</h4>
+                        <p>Made a mistake? You can edit any completed game's stats and score from Game History.</p>
+                    </div>
+                </div>
+
+                <!-- Setting Up a New Team -->
+                <div class="about-section">
+                    <div class="about-section-icon">🏟️</div>
+                    <h3>Setting Up a New Team</h3>
+                    <div class="about-steps">
+                        <div class="about-step">
+                            <span class="about-step-num">1</span>
+                            <div>
+                                <strong>Set your team name</strong>
+                                <p>Go to <strong>Settings</strong> and enter your team name. This appears on the scoreboard and in all stats.</p>
+                            </div>
+                        </div>
+                        <div class="about-step">
+                            <span class="about-step-num">2</span>
+                            <div>
+                                <strong>Add your roster</strong>
+                                <p>Go to <strong>Manage Roster</strong> and add each player with their name, jersey number, and position.</p>
+                            </div>
+                        </div>
+                        <div class="about-step">
+                            <span class="about-step-num">3</span>
+                            <div>
+                                <strong>Create a team for cloud sync</strong>
+                                <p>In <strong>Settings → My Teams</strong>, tap <strong>Create Team</strong>. This generates a unique 6-character join code.</p>
+                            </div>
+                        </div>
+                        <div class="about-step">
+                            <span class="about-step-num">4</span>
+                            <div>
+                                <strong>Share the code</strong>
+                                <p>Give the join code to assistant coaches, parents, or anyone who should have access. They sign in with Google and enter the code in <strong>Settings → Join Team</strong>.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cloud Sync -->
+                <div class="about-section">
+                    <div class="about-section-icon">☁️</div>
+                    <h3>Cloud Sync & Code Sharing</h3>
+                    <p class="about-intro">Laxtracular uses Google sign-in and cloud sync so your whole team stays in sync.</p>
+                    <div class="about-card">
+                        <h4>How It Works</h4>
+                        <ul class="about-list">
+                            <li>When you <strong>create a team</strong>, your roster, games, and stats are stored in the cloud.</li>
+                            <li>Anyone who <strong>joins with the code</strong> gets the same data synced to their device automatically.</li>
+                            <li>Changes sync in <strong>real time</strong> — if one person records stats, everyone sees the update.</li>
+                        </ul>
+                    </div>
+                    <div class="about-card">
+                        <h4>Multiple Teams</h4>
+                        <p>You can create or join multiple teams. Switch between them in Settings — each team has its own roster, games, and stats.</p>
+                    </div>
+                    <div class="about-card">
+                        <h4>Offline Support</h4>
+                        <p>Stats are always saved locally first. If you lose connection during a game, everything syncs back up when you're online again.</p>
+                    </div>
+                </div>
+
+                <!-- Tips -->
+                <div class="about-section">
+                    <div class="about-section-icon">💡</div>
+                    <h3>Pro Tips</h3>
+                    <ul class="about-list about-tips-list">
+                        <li>Use <strong>voice input</strong> during live play to keep your eyes on the field — just say the stat and jersey number.</li>
+                        <li>The <strong>undo button</strong> appears for 5 seconds after every voice command.</li>
+                        <li>A game in progress is <strong>auto-saved</strong> to your device. If the app closes, you'll be prompted to resume when you return.</li>
+                        <li>You can track stats for <strong>either team</strong> — choose at game start.</li>
+                        <li><strong>Export your data</strong> from Settings as a JSON backup anytime.</li>
+                    </ul>
+                </div>
+
+                <div class="about-footer">
+                    <p>Built for lacrosse parents, coaches, and fans.</p>
                 </div>
             </div>
         </div>

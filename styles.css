@@ -1283,3 +1283,245 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .team-actions {
     margin-top: 1rem;
 }
+
+/* ===== ABOUT / GET STARTED PAGE ===== */
+.about-content {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 1rem 3rem;
+}
+
+.about-hero {
+    text-align: center;
+    padding: 2.5rem 1rem 2rem;
+}
+
+.about-hero h1 {
+    font-size: 2.5rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--primary-color), #00C853);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.5rem;
+}
+
+.about-tagline {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.about-section {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: var(--card-bg);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+}
+
+.about-section-icon {
+    font-size: 1.6rem;
+    margin-bottom: 0.5rem;
+}
+
+.about-section h3 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    color: var(--text-primary);
+}
+
+.about-intro {
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+    line-height: 1.7;
+}
+
+/* Steps */
+.about-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.about-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.about-step-num {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.about-step strong {
+    display: block;
+    color: var(--text-primary);
+    margin-bottom: 0.15rem;
+}
+
+.about-step p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+/* Cards */
+.about-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-top: 0.75rem;
+}
+
+.about-card h4 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.about-card p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin-bottom: 0.5rem;
+}
+
+.about-card p:last-child {
+    margin-bottom: 0;
+}
+
+.about-card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+@media (max-width: 560px) {
+    .about-card-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.about-card-highlight-blue {
+    border-color: var(--primary-color);
+    border-width: 2px;
+}
+
+.about-card-highlight-blue h4 {
+    color: var(--primary-color);
+}
+
+.about-card-highlight-green {
+    border-color: var(--success-color);
+    border-width: 2px;
+}
+
+.about-card-highlight-green h4 {
+    color: var(--success-color);
+}
+
+.about-card ul {
+    margin: 0.5rem 0;
+    padding-left: 1.25rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.7;
+}
+
+/* Details & badges */
+.about-detail {
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.about-detail:first-of-type {
+    margin-top: 0.5rem;
+}
+
+.about-badge {
+    display: inline-block;
+    background: var(--primary-color);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-right: 0.25rem;
+}
+
+/* Voice examples */
+.about-examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.75rem 0;
+}
+
+.about-examples code {
+    background: rgba(0, 102, 255, 0.15);
+    color: var(--primary-color);
+    padding: 0.35rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Lists */
+.about-list {
+    padding-left: 1.25rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.8;
+    margin-top: 0.5rem;
+}
+
+.about-tips-list li {
+    margin-bottom: 0.5rem;
+}
+
+/* Tip callout */
+.about-tip {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    background: rgba(255, 109, 0, 0.1);
+    border-left: 3px solid var(--warning-color);
+    border-radius: 0 8px 8px 0;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.about-tip strong {
+    color: var(--warning-color);
+}
+
+/* Footer */
+.about-footer {
+    text-align: center;
+    padding: 2rem 0 1rem;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
