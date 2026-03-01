@@ -1131,13 +1131,373 @@ function toggleStatsView() {
         if (e.target === container) container.remove();
     };
 
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display: flex; gap: 0.75rem; margin-top: 1rem;';
+
+    const editLogBtn = document.createElement('button');
+    editLogBtn.textContent = 'Edit Game Log';
+    editLogBtn.className = 'btn-primary';
+    editLogBtn.style.cssText = 'flex: 1;';
+    editLogBtn.onclick = () => { container.remove(); showInGameEditLog(); };
+    btnRow.appendChild(editLogBtn);
+
     const closeBtn = document.createElement('button');
     closeBtn.textContent = 'Close';
     closeBtn.className = 'btn-secondary';
+    closeBtn.style.cssText = 'flex: 1;';
     closeBtn.onclick = () => container.remove();
-    container.firstChild.appendChild(closeBtn);
+    btnRow.appendChild(closeBtn);
+
+    container.firstChild.appendChild(btnRow);
 
     document.body.appendChild(container);
+}
+
+// ===== IN-GAME EDIT LOG =====
+function buildGameLog() {
+    const roster = getRoster();
+    const pLabel = currentGame.format === 'quarters' ? 'Q' : 'H';
+    const entries = [];
+
+    const statDisplayNames = {
+        'goal': 'Goal', 'assist': 'Assist', 'shot': 'Shot',
+        'ground-ball': 'Ground Ball', 'faceoff-won': 'Faceoff Won',
+        'faceoff-lost': 'Faceoff Lost', 'turnover': 'Turnover',
+        'caused-turnover': 'Caused Turnover', 'save': 'Save', 'penalty': 'Penalty'
+    };
+
+    // Player stats
+    for (const playerId of Object.keys(currentGame.stats)) {
+        const playerStats = currentGame.stats[playerId];
+        const player = roster.find(p => p.id === playerId);
+        const playerLabel = player ? `#${player.number} ${player.name}` : `Player ${playerId}`;
+
+        for (const statType of Object.keys(playerStats)) {
+            const val = playerStats[statType];
+            if (!Array.isArray(val)) continue;
+            val.forEach((ts, index) => {
+                if (!ts.period) return; // skip empty timestamp objects
+                entries.push({
+                    source: 'player', playerId, playerLabel,
+                    statType, statLabel: statDisplayNames[statType] || statType,
+                    period: ts.period, time: ts.time, timeRemaining: ts.timeRemaining || 0,
+                    index, pLabel
+                });
+            });
+        }
+    }
+
+    // Opponent stats
+    if (currentGame.opponentStats) {
+        for (const statType of Object.keys(currentGame.opponentStats)) {
+            const val = currentGame.opponentStats[statType];
+            if (!Array.isArray(val)) continue;
+            val.forEach((ts, index) => {
+                if (!ts.period) return;
+                entries.push({
+                    source: 'opponent', playerId: null,
+                    playerLabel: 'Opponent',
+                    statType, statLabel: statDisplayNames[statType] || statType,
+                    period: ts.period, time: ts.time, timeRemaining: ts.timeRemaining || 0,
+                    index, pLabel
+                });
+            });
+        }
+    }
+
+    // Clears
+    if (currentGame.clears) {
+        currentGame.clears.forEach((cl, index) => {
+            if (!cl.period) return;
+            entries.push({
+                source: 'clear', playerId: null,
+                playerLabel: `Clear (${cl.teamName})`,
+                statType: cl.success ? 'clear-success' : 'clear-fail',
+                statLabel: cl.success ? 'Clear' : 'Failed Clear',
+                period: cl.period, time: cl.time, timeRemaining: cl.timeRemaining || 0,
+                index, pLabel
+            });
+        });
+    }
+
+    // Sort: by period ascending, then timeRemaining descending (most recent first within period)
+    entries.sort((a, b) => {
+        if (a.period !== b.period) return a.period - b.period;
+        return b.timeRemaining - a.timeRemaining;
+    });
+
+    return entries;
+}
+
+function showInGameEditLog() {
+    if (!currentGame) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'edit-log-overlay';
+    overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; overflow-y: auto; padding: 1rem;';
+
+    function renderLog() {
+        const entries = buildGameLog();
+        const container = document.createElement('div');
+        container.style.cssText = 'background: white; border-radius: 8px; padding: 1rem; max-width: 600px; margin: 0 auto; color: #1e293b;';
+
+        container.innerHTML = '<h3 style="margin-bottom: 1rem;">Edit Game Log</h3>';
+
+        if (entries.length === 0) {
+            container.innerHTML += '<p style="text-align: center; color: #64748b; font-style: italic; padding: 2rem 0;">No events recorded yet</p>';
+        } else {
+            let currentPeriod = null;
+            entries.forEach(entry => {
+                // Period header
+                if (entry.period !== currentPeriod) {
+                    currentPeriod = entry.period;
+                    const header = document.createElement('div');
+                    header.style.cssText = 'background: #f1f5f9; padding: 0.4rem 0.75rem; font-weight: 700; font-size: 0.85rem; color: #475569; margin-top: 0.75rem; border-radius: 4px;';
+                    header.textContent = `${entry.pLabel}${entry.period}`;
+                    container.appendChild(header);
+                }
+
+                const row = document.createElement('div');
+                row.style.cssText = 'display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem;';
+
+                // Time
+                const timeSpan = document.createElement('span');
+                timeSpan.style.cssText = 'min-width: 40px; color: #64748b; font-variant-numeric: tabular-nums;';
+                timeSpan.textContent = entry.time || '--';
+                row.appendChild(timeSpan);
+
+                // Player + stat
+                const descSpan = document.createElement('span');
+                descSpan.style.cssText = 'flex: 1;';
+                descSpan.innerHTML = `<strong>${entry.playerLabel}</strong> — ${entry.statLabel}`;
+                row.appendChild(descSpan);
+
+                // Edit button (player stats only, not clears or opponent)
+                if (entry.source === 'player') {
+                    const editBtn = document.createElement('button');
+                    editBtn.textContent = 'Edit';
+                    editBtn.style.cssText = 'padding: 0.2rem 0.5rem; font-size: 0.8rem; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer;';
+                    editBtn.onclick = () => reassignStat(entry.statType, entry.index, entry.playerId, overlay, renderLog);
+                    row.appendChild(editBtn);
+                }
+
+                // Delete button
+                const delBtn = document.createElement('button');
+                delBtn.textContent = 'Del';
+                delBtn.style.cssText = 'padding: 0.2rem 0.5rem; font-size: 0.8rem; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;';
+                delBtn.onclick = () => deleteStatEntry(entry.source, entry.statType, entry.index, entry.playerId, overlay, renderLog);
+                row.appendChild(delBtn);
+
+                container.appendChild(row);
+            });
+        }
+
+        // Close button
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = 'Close';
+        closeBtn.className = 'btn-secondary';
+        closeBtn.style.cssText = 'width: 100%; margin-top: 1rem;';
+        closeBtn.onclick = () => overlay.remove();
+        container.appendChild(closeBtn);
+
+        overlay.innerHTML = '';
+        overlay.appendChild(container);
+    }
+
+    renderLog();
+    document.body.appendChild(overlay);
+}
+
+function reassignStat(statType, index, oldPlayerId, overlay, refreshFn) {
+    if (!currentGame) return;
+    const roster = getRoster();
+
+    // Build a player picker overlay on top
+    const picker = document.createElement('div');
+    picker.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 1100; padding: 1rem; overflow-y: auto;';
+
+    const box = document.createElement('div');
+    box.style.cssText = 'background: white; border-radius: 8px; padding: 1rem; max-width: 400px; margin: 2rem auto; color: #1e293b;';
+    box.innerHTML = '<h3 style="margin-bottom: 1rem;">Reassign to which player?</h3>';
+
+    const grid = document.createElement('div');
+    grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.5rem;';
+
+    roster.forEach(player => {
+        if (player.id === oldPlayerId) return; // skip current player
+        const btn = document.createElement('button');
+        btn.textContent = `#${player.number} ${player.name}`;
+        btn.style.cssText = 'padding: 0.6rem 0.5rem; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-size: 0.85rem; text-align: center;';
+        btn.onclick = () => {
+            const newPlayerId = player.id;
+
+            // Initialize stats for new player if needed
+            if (!currentGame.stats[newPlayerId]) {
+                currentGame.stats[newPlayerId] = {
+                    'faceoff-won': [], 'faceoff-lost': [], 'ground-ball': [],
+                    'shot': [], 'goal': [], 'assist': [], 'turnover': [],
+                    'caused-turnover': [], 'save': [], 'penalty': []
+                };
+            }
+
+            const oldArr = currentGame.stats[oldPlayerId][statType];
+            if (!Array.isArray(oldArr) || index >= oldArr.length) { picker.remove(); return; }
+
+            // Move the timestamp entry
+            const entry = oldArr.splice(index, 1)[0];
+            if (Array.isArray(currentGame.stats[newPlayerId][statType])) {
+                currentGame.stats[newPlayerId][statType].push(entry);
+            }
+
+            // If goal, also move the matching auto-recorded shot
+            if (statType === 'goal') {
+                const oldShots = currentGame.stats[oldPlayerId]['shot'];
+                if (Array.isArray(oldShots)) {
+                    const shotIdx = oldShots.findIndex(s =>
+                        s.period === entry.period && s.timeRemaining === entry.timeRemaining
+                    );
+                    if (shotIdx !== -1) {
+                        const shotEntry = oldShots.splice(shotIdx, 1)[0];
+                        if (Array.isArray(currentGame.stats[newPlayerId]['shot'])) {
+                            currentGame.stats[newPlayerId]['shot'].push(shotEntry);
+                        }
+                    }
+                }
+            }
+
+            saveCurrentGame();
+            picker.remove();
+            refreshFn();
+        };
+        grid.appendChild(btn);
+    });
+
+    box.appendChild(grid);
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.className = 'btn-secondary';
+    cancelBtn.style.cssText = 'width: 100%; margin-top: 1rem;';
+    cancelBtn.onclick = () => picker.remove();
+    box.appendChild(cancelBtn);
+
+    picker.appendChild(box);
+    document.body.appendChild(picker);
+}
+
+function deleteStatEntry(source, statType, index, playerId, overlay, refreshFn) {
+    if (!currentGame) return;
+
+    if (!confirm('Delete this stat entry?')) return;
+
+    let deletedEntry = null;
+
+    if (source === 'player' && playerId) {
+        const arr = currentGame.stats[playerId][statType];
+        if (Array.isArray(arr) && index < arr.length) {
+            deletedEntry = arr.splice(index, 1)[0];
+        }
+
+        // Goal side effects
+        if (statType === 'goal' && deletedEntry) {
+            // Decrement home team score (player goals always count for tracking team)
+            if (currentGame.trackingTeam === 'home') {
+                currentGame.homeScore = Math.max(0, currentGame.homeScore - 1);
+                document.getElementById('home-score').textContent = currentGame.homeScore;
+                if (currentGame.periodScores && deletedEntry.period) {
+                    const idx = deletedEntry.period - 1;
+                    currentGame.periodScores.home[idx] = Math.max(0, (currentGame.periodScores.home[idx] || 0) - 1);
+                }
+            } else {
+                currentGame.awayScore = Math.max(0, currentGame.awayScore - 1);
+                document.getElementById('away-score').textContent = currentGame.awayScore;
+                if (currentGame.periodScores && deletedEntry.period) {
+                    const idx = deletedEntry.period - 1;
+                    currentGame.periodScores.away[idx] = Math.max(0, (currentGame.periodScores.away[idx] || 0) - 1);
+                }
+            }
+
+            // Remove matching auto-recorded shot
+            const shots = currentGame.stats[playerId]['shot'];
+            if (Array.isArray(shots)) {
+                const shotIdx = shots.findIndex(s =>
+                    s.period === deletedEntry.period && s.timeRemaining === deletedEntry.timeRemaining
+                );
+                if (shotIdx !== -1) shots.splice(shotIdx, 1);
+            }
+
+            // Offer to delete paired assist
+            const roster = getRoster();
+            for (const pid of Object.keys(currentGame.stats)) {
+                const assists = currentGame.stats[pid]['assist'];
+                if (!Array.isArray(assists)) continue;
+                const assistIdx = assists.findIndex(a =>
+                    a.period === deletedEntry.period && a.timeRemaining === deletedEntry.timeRemaining
+                );
+                if (assistIdx !== -1) {
+                    const assistPlayer = roster.find(p => p.id === pid);
+                    const label = assistPlayer ? `#${assistPlayer.number} ${assistPlayer.name}` : pid;
+                    if (confirm(`Also delete the paired assist by ${label}?`)) {
+                        assists.splice(assistIdx, 1);
+                    }
+                    break;
+                }
+            }
+        }
+    } else if (source === 'opponent') {
+        const arr = currentGame.opponentStats[statType];
+        if (Array.isArray(arr) && index < arr.length) {
+            deletedEntry = arr.splice(index, 1)[0];
+        }
+
+        // Opponent goal side effects
+        if (statType === 'goal' && deletedEntry) {
+            if (currentGame.trackingTeam === 'home') {
+                currentGame.awayScore = Math.max(0, currentGame.awayScore - 1);
+                document.getElementById('away-score').textContent = currentGame.awayScore;
+                if (currentGame.periodScores && deletedEntry.period) {
+                    const idx = deletedEntry.period - 1;
+                    currentGame.periodScores.away[idx] = Math.max(0, (currentGame.periodScores.away[idx] || 0) - 1);
+                }
+            } else {
+                currentGame.homeScore = Math.max(0, currentGame.homeScore - 1);
+                document.getElementById('home-score').textContent = currentGame.homeScore;
+                if (currentGame.periodScores && deletedEntry.period) {
+                    const idx = deletedEntry.period - 1;
+                    currentGame.periodScores.home[idx] = Math.max(0, (currentGame.periodScores.home[idx] || 0) - 1);
+                }
+            }
+
+            // Remove matching auto-recorded shot
+            const oppShots = currentGame.opponentStats['shot'];
+            if (Array.isArray(oppShots)) {
+                const shotIdx = oppShots.findIndex(s =>
+                    s.period === deletedEntry.period && s.timeRemaining === deletedEntry.timeRemaining
+                );
+                if (shotIdx !== -1) oppShots.splice(shotIdx, 1);
+            }
+
+            // Offer to delete paired assist
+            const oppAssists = currentGame.opponentStats['assist'];
+            if (Array.isArray(oppAssists)) {
+                const assistIdx = oppAssists.findIndex(a =>
+                    a.period === deletedEntry.period && a.timeRemaining === deletedEntry.timeRemaining
+                );
+                if (assistIdx !== -1) {
+                    if (confirm('Also delete the paired opponent assist?')) {
+                        oppAssists.splice(assistIdx, 1);
+                    }
+                }
+            }
+        }
+    } else if (source === 'clear') {
+        if (currentGame.clears && index < currentGame.clears.length) {
+            deletedEntry = currentGame.clears.splice(index, 1)[0];
+        }
+    }
+
+    saveCurrentGame();
+    refreshFn();
 }
 
 // ===== GAME HISTORY =====
