@@ -1155,11 +1155,27 @@ function toggleStatsView() {
 
 // ===== SHOT LOCATION CAPTURE =====
 function createFieldSVG(darkMode) {
-    const bg = darkMode ? '#1a3a1a' : '#2d5a27';
     const line = darkMode ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.85)';
     const faint = darkMode ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.35)';
+    const bg1 = darkMode ? '#1a3a1a' : '#2d5a27';
+    const bg2 = darkMode ? '#1e4d1e' : '#347a2e';
     return `<svg viewBox="0 0 300 250" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:400px;display:block;margin:0 auto;border-radius:8px;">
-        <rect width="300" height="250" fill="${bg}" rx="8"/>
+        <defs>
+            <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="${bg1}"/>
+                <stop offset="30%" stop-color="${bg2}"/>
+                <stop offset="50%" stop-color="${bg1}"/>
+                <stop offset="70%" stop-color="${bg2}"/>
+                <stop offset="100%" stop-color="${bg1}"/>
+            </linearGradient>
+            <radialGradient id="creaseFill" cx="150" cy="30" r="27" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="rgba(255,100,100,0.1)"/>
+                <stop offset="100%" stop-color="rgba(255,100,100,0)"/>
+            </radialGradient>
+        </defs>
+        <rect width="300" height="250" fill="url(#grass)" rx="8"/>
+        <!-- Crease danger zone shading -->
+        <circle cx="150" cy="30" r="27" fill="url(#creaseFill)"/>
         <!-- Endline -->
         <line x1="20" y1="30" x2="280" y2="30" stroke="${line}" stroke-width="2"/>
         <!-- Sidelines -->
@@ -1167,33 +1183,38 @@ function createFieldSVG(darkMode) {
         <line x1="280" y1="30" x2="280" y2="250" stroke="${line}" stroke-width="2"/>
         <!-- Restraining line -->
         <line x1="20" y1="220" x2="280" y2="220" stroke="${faint}" stroke-width="1.5" stroke-dasharray="6,4"/>
-        <!-- Goal (rectangle behind crease) -->
-        <rect x="138" y="18" width="24" height="12" fill="none" stroke="${line}" stroke-width="2" rx="2"/>
-        <!-- Crease circle (9ft radius ~ 27px at this scale) -->
+        <!-- Goal (net fill) -->
+        <rect x="138" y="18" width="24" height="12" fill="rgba(255,255,255,0.08)" stroke="${line}" stroke-width="2" rx="2"/>
+        <!-- Crease circle -->
         <circle cx="150" cy="30" r="27" fill="none" stroke="${line}" stroke-width="2"/>
         <!-- Goal line extension -->
         <line x1="100" y1="30" x2="200" y2="30" stroke="${line}" stroke-width="2.5"/>
         <!-- Center hash marks -->
-        <line x1="148" y1="120" x2="152" y2="120" stroke="${faint}" stroke-width="1.5"/>
-        <line x1="148" y1="170" x2="152" y2="170" stroke="${faint}" stroke-width="1.5"/>
-        <!-- Wing area markers -->
-        <line x1="60" y1="100" x2="66" y2="100" stroke="${faint}" stroke-width="1.5"/>
-        <line x1="234" y1="100" x2="240" y2="100" stroke="${faint}" stroke-width="1.5"/>
+        <line x1="146" y1="118" x2="154" y2="122" stroke="${faint}" stroke-width="1.5"/>
+        <line x1="146" y1="168" x2="154" y2="172" stroke="${faint}" stroke-width="1.5"/>
+        <!-- Wing area arcs -->
+        <path d="M50,95 Q60,100 50,105" fill="none" stroke="${faint}" stroke-width="1.5"/>
+        <path d="M250,95 Q240,100 250,105" fill="none" stroke="${faint}" stroke-width="1.5"/>
     </svg>`;
 }
 
 function promptShotLocation(ts, onDone) {
     const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.92);z-index:2000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1rem;';
+    overlay.className = 'overlay overlay--centered shot-picker';
 
     const title = document.createElement('div');
+    title.className = 'shot-picker-title';
     title.textContent = 'Tap where the shot came from';
-    title.style.cssText = 'color:white;font-size:1.1rem;font-weight:600;margin-bottom:1rem;text-align:center;';
     overlay.appendChild(title);
 
+    const subtitle = document.createElement('div');
+    subtitle.className = 'shot-picker-subtitle';
+    subtitle.textContent = 'Tap the field below';
+    overlay.appendChild(subtitle);
+
     const fieldContainer = document.createElement('div');
+    fieldContainer.className = 'shot-picker-field';
     fieldContainer.innerHTML = createFieldSVG(true);
-    fieldContainer.style.cssText = 'width:100%;max-width:400px;cursor:crosshair;';
     overlay.appendChild(fieldContainer);
 
     const svg = fieldContainer.querySelector('svg');
@@ -1205,25 +1226,53 @@ function promptShotLocation(ts, onDone) {
         ts.y = Math.round(y * 1000) / 1000;
         saveCurrentGame();
 
-        // Show brief confirmation dot
+        const cx = x * 300;
+        const cy = y * 250;
+
+        // Inner solid dot
         const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        dot.setAttribute('cx', x * 300);
-        dot.setAttribute('cy', y * 250);
+        dot.setAttribute('cx', cx);
+        dot.setAttribute('cy', cy);
         dot.setAttribute('r', '8');
         dot.setAttribute('fill', '#10b981');
         dot.setAttribute('stroke', 'white');
         dot.setAttribute('stroke-width', '2');
         svg.appendChild(dot);
 
+        // Ripple ring 1
+        const ring1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        ring1.setAttribute('cx', cx);
+        ring1.setAttribute('cy', cy);
+        ring1.setAttribute('r', '8');
+        ring1.setAttribute('fill', 'none');
+        ring1.setAttribute('stroke', '#10b981');
+        ring1.setAttribute('stroke-width', '2');
+        ring1.innerHTML = `<animate attributeName="r" from="8" to="24" dur="0.4s" fill="freeze"/>
+            <animate attributeName="stroke-opacity" from="0.8" to="0" dur="0.4s" fill="freeze"/>`;
+        svg.appendChild(ring1);
+
+        // Ripple ring 2 (delayed)
+        const ring2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        ring2.setAttribute('cx', cx);
+        ring2.setAttribute('cy', cy);
+        ring2.setAttribute('r', '8');
+        ring2.setAttribute('fill', 'none');
+        ring2.setAttribute('stroke', 'white');
+        ring2.setAttribute('stroke-width', '1.5');
+        ring2.innerHTML = `<animate attributeName="r" from="8" to="32" dur="0.5s" begin="0.1s" fill="freeze"/>
+            <animate attributeName="stroke-opacity" from="0.6" to="0" dur="0.5s" begin="0.1s" fill="freeze"/>`;
+        svg.appendChild(ring2);
+
         setTimeout(() => {
             overlay.remove();
             onDone();
-        }, 300);
+        }, 500);
     });
 
     const skipBtn = document.createElement('button');
+    skipBtn.className = 'btn-secondary';
     skipBtn.textContent = 'Skip';
-    skipBtn.style.cssText = 'margin-top:1.5rem;padding:0.75rem 2rem;font-size:1rem;border-radius:8px;border:2px solid rgba(255,255,255,0.3);background:transparent;color:rgba(255,255,255,0.7);cursor:pointer;';
+    skipBtn.style.cssText = 'margin-top: 1.5rem; max-width: 200px;';
     skipBtn.onclick = () => {
         overlay.remove();
         onDone();
