@@ -4,13 +4,15 @@ A mobile-friendly web app for tracking lacrosse game stats in real-time. Built f
 
 ## Features
 
+- **Google Sign-In** — sign in with your Google account to persist your data across devices
+- **Multi-Team Support** — belong to multiple teams and switch between them instantly
 - **Live Game Tracking** — real-time scoreboard, game clock, and period management
 - **Full Stat Entry** — faceoffs, ground balls, shots, goals, assists, turnovers, takeaways, saves, and penalties
 - **Voice Input** — hands-free stat recording via microphone (on supported browsers)
 - **Roster Management** — add players with name, number, and position
 - **Game Scheduling** — schedule upcoming games with opponent, date/time, location, and format
 - **Season Summary** — aggregated player stats and per-game averages across all completed games
-- **Cloud Sync** — share a team code so multiple devices see the same roster and game data in real-time
+- **Cloud Sync** — multiple devices see the same roster and game data in real-time
 - **Export/Import** — backup and restore all data as JSON
 - **Penalty Tracking** — timed penalties that count down with the game clock
 - **Works Offline** — all data is stored locally; no internet required after initial load
@@ -28,13 +30,25 @@ A mobile-friendly web app for tracking lacrosse game stats in real-time. Built f
 
 Open `index.html` directly in any browser. Everything works locally — no server needed.
 
+### Firebase Setup
+
+Before the app works, you need a Firebase project with:
+
+1. **Authentication > Sign-in method > Google** enabled
+2. **Authentication > Settings > Authorized domains** — add your GitHub Pages domain
+3. **Firestore Database** created with security rules allowing authenticated users to read/write their own data and team data
+
 ## How to Use
 
-### 1. Set Your Team Name
+### 1. Sign In
+
+When you first open the app, you'll see a Google sign-in screen. Tap **Sign in with Google** to authenticate. Your account is used to persist your teams and data across devices.
+
+### 2. Set Your Team Name
 
 Go to **Settings** (gear icon on the home screen) and enter your team name. This name appears on the scoreboard during games.
 
-### 2. Build Your Roster
+### 3. Build Your Roster
 
 1. Tap **Manage Roster** from the home screen
 2. Enter a player's **name**, **jersey number**, and **position** (Attack, Midfield, Defense, or Goalie)
@@ -42,7 +56,7 @@ Go to **Settings** (gear icon on the home screen) and enter your team name. This
 4. Repeat for each player — the roster is saved automatically
 5. To remove a player, tap the red **Delete** button next to their name
 
-### 3. Schedule a Game
+### 4. Schedule a Game
 
 1. Tap **Schedule Game**
 2. Fill in the **opponent name**, **date**, **time**, and **location**
@@ -52,7 +66,7 @@ Go to **Settings** (gear icon on the home screen) and enter your team name. This
 4. Set the **period duration** in minutes (default: 12)
 5. Tap **Schedule Game** — it appears in the list below
 
-### 4. Start a Live Game
+### 5. Start a Live Game
 
 1. Tap **Start Game** from the home screen
 2. Select a scheduled game from the list
@@ -63,7 +77,7 @@ Go to **Settings** (gear icon on the home screen) and enter your team name. This
    - **Period Display** — shows current quarter/half
    - **Voice Input** — tap the microphone button on the right (if supported by your browser)
 
-### 5. Record Stats
+### 6. Record Stats
 
 1. Tap a **stat button** (Goal, Shot, Ground Ball, etc.)
 2. Tap the **player** who earned the stat — or tap the **Opponent Team** button if it was the other team
@@ -71,7 +85,7 @@ Go to **Settings** (gear icon on the home screen) and enter your team name. This
 4. For **penalties**: after selecting the player, choose the penalty duration (30s, 1min, 2min, or 3min) — the penalty timer counts down with the game clock
 5. Tap **Back to Stats** to return to the stat selection
 
-### 6. Use Voice Input
+### 7. Use Voice Input
 
 If your browser supports speech recognition (Chrome, Edge):
 
@@ -80,25 +94,25 @@ If your browser supports speech recognition (Chrome, Edge):
 3. The app parses your speech and records the stat
 4. An **UNDO** toast appears briefly if you need to reverse the last voice entry
 
-### 7. Manage the Clock
+### 8. Manage the Clock
 
 - **Start/Pause** — large button on the left side of the scoreboard, or center controls
 - **Reset** — resets the clock to the beginning of the current period (with confirmation)
 - **Next Period** — advances to the next quarter/half (with confirmation to prevent accidental advances)
 - When the clock hits 0:00, it pauses automatically and alerts you
 
-### 8. End a Game
+### 9. End a Game
 
 Scroll to the bottom of the live game screen and tap **End Game**. You'll be asked to confirm. The game is saved to history with all stats.
 
-### 9. Review Game History
+### 10. Review Game History
 
 1. Tap **Game History** from the home screen
 2. Each completed game shows the opponent, score, result (W/L/T), and date
 3. Tap **View Stats** to see the full player stat table for that game
 4. Tap **Delete Game** to permanently remove a game (requires 3 confirmations — this cannot be undone)
 
-### 10. View Season Summary
+### 11. View Season Summary
 
 Tap **Season Summary** for:
 - **Season overview** — total games played
@@ -107,21 +121,22 @@ Tap **Season Summary** for:
 
 Players are sorted by total points (goals + assists).
 
-## Cloud Sync
+## Teams & Cloud Sync
 
-LaxKeeper supports real-time cloud sync via Firebase so multiple devices (e.g., two parents keeping stats at the same game) can share the same data.
+LaxKeeper supports multiple teams and real-time cloud sync via Firebase. You can belong to several teams at once and switch between them.
 
 ### How It Works
 
-- Sync uses **Firestore** (Google's real-time database)
+- Every user signs in with **Google** — your identity persists across devices
 - Each team gets a unique **6-character team code**
-- Any device with the same team code sees the same roster, games, and settings
+- You can belong to **multiple teams** simultaneously
+- The **active team** determines which roster, games, and settings you see
 - Changes sync in real-time — update a stat on one phone, it appears on the other within seconds
 - The **current live game state** is device-local only (not synced) to avoid conflicts during active stat entry
 
 ### Create a Team
 
-1. Go to **Settings > Cloud Sync**
+1. Go to **Settings > My Teams**
 2. Tap **Create Team**
 3. A 6-character code is generated (e.g., `K4MN7X`)
 4. Your local data is pushed to the cloud
@@ -129,22 +144,30 @@ LaxKeeper supports real-time cloud sync via Firebase so multiple devices (e.g., 
 
 ### Join a Team
 
-1. Go to **Settings > Cloud Sync**
+1. Go to **Settings > My Teams**
 2. Enter the **6-character team code** you received
 3. Tap **Join Team**
-4. You'll be asked to confirm — joining replaces your local roster and game history with the team's cloud data
-5. From now on, all changes sync both ways
+4. You'll be asked to confirm — joining switches you to the team's cloud data
+5. The team is added to your team list
 
-### Copy / Share Your Code
+### Switch Teams
 
-Once connected, your team code is displayed in Settings. Tap **Copy Code** to copy it to your clipboard and share via text, email, etc.
+Your team list in Settings shows all teams you belong to. The active team is highlighted in green. Tap any team to switch — the roster, games, and settings will update to that team's data. The active team name is also shown on the home screen header.
 
 ### Leave a Team
 
-1. Go to **Settings > Cloud Sync**
-2. Tap **Leave Team**
-3. Your data stays on your device but stops syncing
-4. You can rejoin the same team later or create a new one
+1. Go to **Settings > My Teams**
+2. Tap **Leave** next to the team you want to leave
+3. Your data stays on the device but stops syncing
+4. If you leave the active team, you'll be switched to another team (or shown an empty state if no teams remain)
+
+### Copy / Share a Team Code
+
+Tap **Copy** next to any team in your team list to copy its code to your clipboard. Share via text, email, etc.
+
+### Account
+
+Your Google account info (name, email, avatar) is shown in **Settings > Account**. Tap **Sign Out** to return to the sign-in screen. Signing back in restores all your teams and data.
 
 ### Sync Details
 
@@ -153,6 +176,7 @@ Once connected, your team code is displayed in Settings. Tap **Copy Code** to co
 | Roster (players) | Current live game state |
 | Completed games & stats | Clock position during a game |
 | Team name / settings | Device-specific preferences |
+| Team membership list | |
 
 ## Data Backup
 
@@ -190,13 +214,13 @@ In Settings, the **Clear All Data** button wipes everything (roster, games, sett
 |---|---|
 | `index.html` | App structure and screens |
 | `styles.css` | Mobile-first dark theme styling |
-| `app.js` | Core app logic — roster, games, stats, clock, voice |
-| `firebase-config.js` | Firebase project configuration |
-| `firebase-sync.js` | Cloud sync layer — team codes, Firestore read/write, real-time listeners |
+| `app.js` | Core app logic — roster, games, stats, clock, voice, auth UI |
+| `firebase-config.js` | Firebase project config, Google auth, user profile sync |
+| `firebase-sync.js` | Cloud sync layer — multi-team management, Firestore read/write, real-time listeners |
 
 ## Tech Stack
 
 - **HTML / CSS / JavaScript** — no build step, no framework
-- **Firebase Auth** (anonymous) + **Firestore** for cloud sync
+- **Firebase Auth** (Google sign-in) + **Firestore** for cloud sync
 - **Web Speech API** for voice input
 - **localStorage** for offline-first data persistence
