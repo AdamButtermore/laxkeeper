@@ -220,6 +220,8 @@
 
                     <!-- Penalty Display -->
                     <div id="penalty-display" style="margin-top: 1rem; width: 100%;"></div>
+                    <!-- Timeout Display -->
+                    <div id="timeout-display" style="margin-top: 0.5rem; width: 100%;"></div>
                 </div>
 
                 <div class="team away-team">
@@ -253,6 +255,8 @@
                         <button class="stat-btn" onclick="selectStat('caused-turnover')">Takeaway</button>
                         <button class="stat-btn" onclick="selectStat('save')">Save (GK)</button>
                         <button class="stat-btn stat-btn-penalty" onclick="selectStat('penalty')">Penalty</button>
+                        <button class="stat-btn" onclick="callTimeout('home')" style="background: #3b82f6; color: white;">Timeout (Us)</button>
+                        <button class="stat-btn" onclick="callTimeout('away')" style="background: #f59e0b; color: white;">Timeout (Opp)</button>
                     </div>
                 </div>
 

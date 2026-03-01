@@ -508,6 +508,7 @@ function loadGameScreen() {
         currentGame.activePenalties = [];
     }
     updatePenaltyDisplay();
+    updateTimeoutDisplay();
 
     // Update opponent button name
     const opponentName = currentGame.trackingTeam === 'home' ? currentGame.opponent : teamName;
@@ -628,6 +629,71 @@ function nextPeriod() {
     updatePeriodDisplay();
     updateClock();
     saveCurrentGame();
+}
+
+// ===== TIMEOUTS =====
+function callTimeout(team) {
+    if (!currentGame) return;
+
+    // Initialize timeouts array if needed
+    if (!currentGame.timeouts) currentGame.timeouts = [];
+
+    const ts = recordStatTimestamp();
+    const teamName = team === 'home'
+        ? (localStorage.getItem(STORAGE_KEYS.TEAM_NAME) || 'Home')
+        : currentGame.opponent;
+
+    currentGame.timeouts.push({
+        team: team,
+        teamName: teamName,
+        ...ts
+    });
+
+    // Pause the clock
+    if (currentGame.clockRunning) {
+        pauseClock();
+    }
+    currentGame.clockPausedForGoal = false; // don't auto-resume after timeout
+
+    saveCurrentGame();
+    updateTimeoutDisplay();
+}
+
+function updateTimeoutDisplay() {
+    const container = document.getElementById('timeout-display');
+    if (!container || !currentGame) return;
+
+    if (!currentGame.timeouts || currentGame.timeouts.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const teamName = localStorage.getItem(STORAGE_KEYS.TEAM_NAME) || 'Home';
+    const homeTimeouts = currentGame.timeouts.filter(t => t.team === 'home');
+    const awayTimeouts = currentGame.timeouts.filter(t => t.team === 'away');
+
+    const homeName = currentGame.trackingTeam === 'home' ? teamName : currentGame.opponent;
+    const awayName = currentGame.trackingTeam === 'home' ? currentGame.opponent : teamName;
+
+    let html = '<div style="font-size: 0.85rem; color: #94a3b8;">';
+    if (homeTimeouts.length > 0) {
+        html += `<div style="margin-bottom: 0.25rem;"><strong>${homeName}:</strong> ${homeTimeouts.length} TO`;
+        html += ' (' + homeTimeouts.map(t => {
+            const pLabel = currentGame.format === 'quarters' ? 'Q' : 'H';
+            return `${pLabel}${t.period} ${t.time}`;
+        }).join(', ') + ')';
+        html += '</div>';
+    }
+    if (awayTimeouts.length > 0) {
+        html += `<div><strong>${awayName}:</strong> ${awayTimeouts.length} TO`;
+        html += ' (' + awayTimeouts.map(t => {
+            const pLabel = currentGame.format === 'quarters' ? 'Q' : 'H';
+            return `${pLabel}${t.period} ${t.time}`;
+        }).join(', ') + ')';
+        html += '</div>';
+    }
+    html += '</div>';
+    container.innerHTML = html;
 }
 
 // ===== STAT & PLAYER SELECTION =====
@@ -1389,6 +1455,24 @@ function viewGameStats(gameId) {
                             isOpponent: true
                         });
                     }
+                });
+            }
+        });
+    }
+
+    // Collect timeout events
+    if (game.timeouts) {
+        game.timeouts.forEach(to => {
+            if (to.period) {
+                gameLogEvents.push({
+                    period: to.period,
+                    time: to.time || '',
+                    timeRemaining: to.timeRemaining != null ? to.timeRemaining : 0,
+                    label: to.teamName || (to.team === 'home' ? 'Home' : 'Away'),
+                    stat: 'Timeout',
+                    statKey: 'timeout',
+                    isGoal: false,
+                    isOpponent: to.team !== game.trackingTeam
                 });
             }
         });
