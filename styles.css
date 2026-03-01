@@ -76,6 +76,20 @@ header p {
     font-size: 0.9rem;
 }
 
+.home-header-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.header-logo {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    border-radius: 50%;
+}
+
 .back-btn {
     position: absolute;
     left: 1rem;
