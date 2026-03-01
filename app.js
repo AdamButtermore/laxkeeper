@@ -12,6 +12,31 @@ let currentGame = null;
 let clockInterval = null;
 let selectedStat = null;
 
+// ===== STAT TIMESTAMP HELPERS =====
+// Returns integer count from either old (number) or new (array) format
+function getStatCount(val) {
+    if (Array.isArray(val)) return val.length;
+    if (typeof val === 'number') return val;
+    return 0;
+}
+
+// Returns a timestamp object from current game clock state
+function recordStatTimestamp() {
+    if (!currentGame) return {};
+    return {
+        period: currentGame.currentPeriod,
+        time: formatClockTime(currentGame.timeRemaining),
+        timeRemaining: currentGame.timeRemaining
+    };
+}
+
+// Format seconds into M:SS string
+function formatClockTime(totalSeconds) {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {
     // Wait for Firebase auth before loading data
@@ -400,16 +425,20 @@ function initializeGame(game, roster, trackingTeam, trackingTeamName) {
         clockRunning: false,
         stats: {},
         opponentStats: {
-            'faceoff-won': 0,
-            'faceoff-lost': 0,
-            'ground-ball': 0,
-            'shot': 0,
-            'goal': 0,
-            'assist': 0,
-            'turnover': 0,
-            'caused-turnover': 0,
-            'save': 0,
-            'penalty': 0
+            'faceoff-won': [],
+            'faceoff-lost': [],
+            'ground-ball': [],
+            'shot': [],
+            'goal': [],
+            'assist': [],
+            'turnover': [],
+            'caused-turnover': [],
+            'save': [],
+            'penalty': []
+        },
+        periodScores: {
+            home: Array(game.format === 'quarters' ? 4 : 2).fill(0),
+            away: Array(game.format === 'quarters' ? 4 : 2).fill(0)
         },
         activePenalties: [], // Array of {playerId, playerName, duration, timeRemaining}
         trackingTeam: trackingTeam, // 'home' or 'away'
@@ -420,16 +449,16 @@ function initializeGame(game, roster, trackingTeam, trackingTeamName) {
     // Initialize stats for each player
     roster.forEach(player => {
         currentGame.stats[player.id] = {
-            'faceoff-won': 0,
-            'faceoff-lost': 0,
-            'ground-ball': 0,
-            'shot': 0,
-            'goal': 0,
-            'assist': 0,
-            'turnover': 0,
-            'caused-turnover': 0,
-            'save': 0,
-            'penalty': 0
+            'faceoff-won': [],
+            'faceoff-lost': [],
+            'ground-ball': [],
+            'shot': [],
+            'goal': [],
+            'assist': [],
+            'turnover': [],
+            'caused-turnover': [],
+            'save': [],
+            'penalty': []
         };
     });
 
@@ -499,9 +528,17 @@ function adjustScore(team, amount) {
     if (team === 'home') {
         currentGame.homeScore = Math.max(0, currentGame.homeScore + amount);
         document.getElementById('home-score').textContent = currentGame.homeScore;
+        if (currentGame.periodScores) {
+            const idx = currentGame.currentPeriod - 1;
+            currentGame.periodScores.home[idx] = Math.max(0, (currentGame.periodScores.home[idx] || 0) + amount);
+        }
     } else {
         currentGame.awayScore = Math.max(0, currentGame.awayScore + amount);
         document.getElementById('away-score').textContent = currentGame.awayScore;
+        if (currentGame.periodScores) {
+            const idx = currentGame.currentPeriod - 1;
+            currentGame.periodScores.away[idx] = Math.max(0, (currentGame.periodScores.away[idx] || 0) + amount);
+        }
     }
     saveCurrentGame();
 }
@@ -640,14 +677,26 @@ function selectPlayerForStat(playerId) {
     }
 
     // Record the stat
-    currentGame.stats[playerId][selectedStat]++;
+    const ts = recordStatTimestamp();
+    if (Array.isArray(currentGame.stats[playerId][selectedStat])) {
+        currentGame.stats[playerId][selectedStat].push(ts);
+    } else {
+        currentGame.stats[playerId][selectedStat]++;
+    }
 
     // Auto-increment score for goals and record shot
     if (selectedStat === 'goal') {
         // Also record a shot
-        currentGame.stats[playerId]['shot']++;
+        if (Array.isArray(currentGame.stats[playerId]['shot'])) {
+            currentGame.stats[playerId]['shot'].push(ts);
+        } else {
+            currentGame.stats[playerId]['shot']++;
+        }
 
         currentGame.homeScore++;
+        if (currentGame.periodScores) {
+            currentGame.periodScores.home[currentGame.currentPeriod - 1]++;
+        }
         document.getElementById('home-score').textContent = currentGame.homeScore;
         saveCurrentGame();
 
@@ -688,19 +737,34 @@ function recordOpponentStat() {
     if (!selectedStat) return;
 
     // Record stat for opponent team
-    currentGame.opponentStats[selectedStat]++;
+    const ts = recordStatTimestamp();
+    if (Array.isArray(currentGame.opponentStats[selectedStat])) {
+        currentGame.opponentStats[selectedStat].push(ts);
+    } else {
+        currentGame.opponentStats[selectedStat]++;
+    }
 
     // Auto-increment opponent score for goals and record shot
     if (selectedStat === 'goal') {
         // Also record a shot
-        currentGame.opponentStats['shot']++;
+        if (Array.isArray(currentGame.opponentStats['shot'])) {
+            currentGame.opponentStats['shot'].push(ts);
+        } else {
+            currentGame.opponentStats['shot']++;
+        }
 
         // Determine which score to increment based on tracking team
         if (currentGame.trackingTeam === 'home') {
             currentGame.awayScore++;
+            if (currentGame.periodScores) {
+                currentGame.periodScores.away[currentGame.currentPeriod - 1]++;
+            }
             document.getElementById('away-score').textContent = currentGame.awayScore;
         } else {
             currentGame.homeScore++;
+            if (currentGame.periodScores) {
+                currentGame.periodScores.home[currentGame.currentPeriod - 1]++;
+            }
             document.getElementById('home-score').textContent = currentGame.homeScore;
         }
     }
@@ -754,7 +818,12 @@ function promptForAssist(goalScorerId) {
             <div class="player-btn-name">${player.name.split(' ')[0]}</div>
         `;
         btn.onclick = () => {
-            currentGame.stats[player.id]['assist']++;
+            const assistTs = recordStatTimestamp();
+            if (Array.isArray(currentGame.stats[player.id]['assist'])) {
+                currentGame.stats[player.id]['assist'].push(assistTs);
+            } else {
+                currentGame.stats[player.id]['assist']++;
+            }
             saveCurrentGame();
 
             // Show confirmation
@@ -859,10 +928,10 @@ function toggleStatsView() {
         const stats = currentGame.stats[player.id];
         if (!stats) return;
 
-        const goals = stats.goal || 0;
-        const assists = stats.assist || 0;
+        const goals = getStatCount(stats.goal);
+        const assists = getStatCount(stats.assist);
         const points = goals + assists;
-        const totalStats = Object.values(stats).reduce((a, b) => a + b, 0);
+        const totalStats = Object.values(stats).reduce((a, b) => a + getStatCount(b), 0);
 
         if (totalStats === 0) return;
 
@@ -873,14 +942,14 @@ function toggleStatsView() {
                 <td style="padding: 0.5rem; text-align: center;">${goals}</td>
                 <td style="padding: 0.5rem; text-align: center;">${assists}</td>
                 <td style="padding: 0.5rem; text-align: center; font-weight: 600;">${points}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats.shot || 0}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats['ground-ball'] || 0}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats['faceoff-won'] || 0}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats['faceoff-lost'] || 0}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats.turnover || 0}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats['caused-turnover'] || 0}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats.save || 0}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats.penalty || 0}</td>
+                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats.shot)}</td>
+                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats['ground-ball'])}</td>
+                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats['faceoff-won'])}</td>
+                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats['faceoff-lost'])}</td>
+                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats.turnover)}</td>
+                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats['caused-turnover'])}</td>
+                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats.save)}</td>
+                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats.penalty)}</td>
             </tr>`;
     });
 
@@ -893,21 +962,21 @@ function toggleStatsView() {
     // Opponent stats
     if (currentGame.opponentStats) {
         const oppStats = currentGame.opponentStats;
-        const totalOppStats = Object.values(oppStats).reduce((a, b) => a + b, 0);
+        const totalOppStats = Object.values(oppStats).reduce((a, b) => a + getStatCount(b), 0);
 
         statsHtml += `<h4 style="margin-top: 1.5rem; color: #f59e0b;">${opponentName}</h4>`;
 
         if (totalOppStats > 0) {
-            const goals = oppStats.goal || 0;
-            const assists = oppStats.assist || 0;
+            const goals = getStatCount(oppStats.goal);
+            const assists = getStatCount(oppStats.assist);
             statsHtml += `<div style="padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 4px; background: #fef3c7;">`;
             statsHtml += `<strong>Team Stats:</strong><br>`;
             statsHtml += `<div style="margin-top: 0.5rem; font-size: 0.9rem;">`;
             statsHtml += `Goals: ${goals} | Assists: ${assists} | Points: ${goals + assists} | `;
-            statsHtml += `Shots: ${oppStats.shot || 0} | GB: ${oppStats['ground-ball'] || 0} | `;
-            statsHtml += `FO Won: ${oppStats['faceoff-won'] || 0} | FO Lost: ${oppStats['faceoff-lost'] || 0} | `;
-            statsHtml += `Turnovers: ${oppStats.turnover || 0} | Takeaways: ${oppStats['caused-turnover'] || 0} | `;
-            statsHtml += `Saves: ${oppStats.save || 0} | Penalties: ${oppStats.penalty || 0}`;
+            statsHtml += `Shots: ${getStatCount(oppStats.shot)} | GB: ${getStatCount(oppStats['ground-ball'])} | `;
+            statsHtml += `FO Won: ${getStatCount(oppStats['faceoff-won'])} | FO Lost: ${getStatCount(oppStats['faceoff-lost'])} | `;
+            statsHtml += `Turnovers: ${getStatCount(oppStats.turnover)} | Takeaways: ${getStatCount(oppStats['caused-turnover'])} | `;
+            statsHtml += `Saves: ${getStatCount(oppStats.save)} | Penalties: ${getStatCount(oppStats.penalty)}`;
             statsHtml += `</div></div>`;
         } else {
             statsHtml += `<p style="color: #64748b; font-style: italic;">No stats recorded yet</p>`;
@@ -1021,7 +1090,7 @@ function editGameStats(gameId) {
         html += `<tr style="border-bottom: 1px solid #e2e8f0;">`;
         html += `<td style="padding: 0.5rem; font-weight: 600; white-space: nowrap;">#${player.number} ${player.name}</td>`;
         statKeys.forEach(key => {
-            const val = stats[key] || 0;
+            const val = getStatCount(stats[key]);
             html += `<td style="padding: 0.25rem; text-align: center;">`;
             html += `<input type="number" data-player="${player.id}" data-stat="${key}" value="${val}" min="0" `;
             html += `style="width: 44px; padding: 0.3rem; text-align: center; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem;">`;
@@ -1048,13 +1117,25 @@ function editGameStats(gameId) {
         game.homeScore = parseInt(document.getElementById('edit-home-score').value) || 0;
         game.awayScore = parseInt(document.getElementById('edit-away-score').value) || 0;
 
-        // Read all stat inputs
+        // Read all stat inputs — editing collapses timestamp arrays to plain numbers
         container.querySelectorAll('input[data-player]').forEach(input => {
             const playerId = input.dataset.player;
             const statKey = input.dataset.stat;
-            const val = parseInt(input.value) || 0;
+            const newVal = parseInt(input.value) || 0;
             if (game.stats[playerId]) {
-                game.stats[playerId][statKey] = val;
+                const oldVal = game.stats[playerId][statKey];
+                if (Array.isArray(oldVal)) {
+                    // If count changed, trim or pad the array
+                    if (newVal < oldVal.length) {
+                        game.stats[playerId][statKey] = oldVal.slice(0, newVal);
+                    } else if (newVal > oldVal.length) {
+                        for (let i = oldVal.length; i < newVal; i++) {
+                            oldVal.push({});
+                        }
+                    }
+                } else {
+                    game.stats[playerId][statKey] = newVal;
+                }
             }
         });
 
@@ -1098,6 +1179,48 @@ function viewGameStats(gameId) {
         statsHtml += `<p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1rem;">${gameDate.toLocaleDateString()} at ${gameDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>`;
     }
 
+    // === BOX SCORE BY PERIOD ===
+    if (game.periodScores) {
+        const ps = game.periodScores;
+        const numPeriods = ps.home.length;
+        const isQuarters = numPeriods === 4;
+        const periodLabel = isQuarters ? 'Q' : 'H';
+
+        statsHtml += '<div style="overflow-x: auto; margin-bottom: 1.5rem;">';
+        statsHtml += '<table style="width: auto; border-collapse: collapse; font-size: 0.9rem;">';
+        statsHtml += '<thead><tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">';
+        statsHtml += '<th style="padding: 0.5rem 1rem; text-align: left; font-weight: 700;"></th>';
+        for (let i = 0; i < numPeriods; i++) {
+            statsHtml += `<th style="padding: 0.5rem 0.75rem; text-align: center; font-weight: 700;">${periodLabel}${i + 1}</th>`;
+        }
+        statsHtml += '<th style="padding: 0.5rem 0.75rem; text-align: center; font-weight: 700; border-left: 2px solid #cbd5e1;">Final</th>';
+        statsHtml += '</tr></thead><tbody>';
+
+        const teamName = localStorage.getItem(STORAGE_KEYS.TEAM_NAME) || 'Home';
+        const homeLabel = game.trackingTeam === 'home' ? teamName : game.opponent;
+        const awayLabel = game.trackingTeam === 'home' ? game.opponent : teamName;
+
+        // Home row
+        statsHtml += '<tr style="border-bottom: 1px solid #e2e8f0;">';
+        statsHtml += `<td style="padding: 0.5rem 1rem; font-weight: 600;">${homeLabel}</td>`;
+        for (let i = 0; i < numPeriods; i++) {
+            statsHtml += `<td style="padding: 0.5rem 0.75rem; text-align: center;">${ps.home[i]}</td>`;
+        }
+        statsHtml += `<td style="padding: 0.5rem 0.75rem; text-align: center; font-weight: 700; border-left: 2px solid #cbd5e1;">${game.homeScore}</td>`;
+        statsHtml += '</tr>';
+
+        // Away row
+        statsHtml += '<tr style="border-bottom: 1px solid #e2e8f0;">';
+        statsHtml += `<td style="padding: 0.5rem 1rem; font-weight: 600;">${awayLabel}</td>`;
+        for (let i = 0; i < numPeriods; i++) {
+            statsHtml += `<td style="padding: 0.5rem 0.75rem; text-align: center;">${ps.away[i]}</td>`;
+        }
+        statsHtml += `<td style="padding: 0.5rem 0.75rem; text-align: center; font-weight: 700; border-left: 2px solid #cbd5e1;">${game.awayScore}</td>`;
+        statsHtml += '</tr>';
+
+        statsHtml += '</tbody></table></div>';
+    }
+
     statsHtml += '<h4 style="margin-top: 1rem; color: #1e293b;">Player Statistics</h4>';
 
     statsHtml += `
@@ -1128,20 +1251,20 @@ function viewGameStats(gameId) {
     [...roster].sort((a, b) => Number(a.number) - Number(b.number)).forEach(player => {
         const stats = game.stats[player.id];
         if (!stats) return;
-        const totalStats = Object.values(stats).reduce((a, b) => a + b, 0);
+        const totalStats = Object.values(stats).reduce((a, b) => a + getStatCount(b), 0);
         if (totalStats === 0) return;
-        const goals = stats.goal || 0;
-        const assists = stats.assist || 0;
-        const shots = stats.shot || 0;
-        const fow = stats['faceoff-won'] || 0;
-        const fol = stats['faceoff-lost'] || 0;
+        const goals = getStatCount(stats.goal);
+        const assists = getStatCount(stats.assist);
+        const shots = getStatCount(stats.shot);
+        const fow = getStatCount(stats['faceoff-won']);
+        const fol = getStatCount(stats['faceoff-lost']);
         playerRows.push({
             player, goals, assists, points: goals + assists, shots,
             shotPct: shots > 0 ? Math.round(goals / shots * 100) : -1,
-            gb: stats['ground-ball'] || 0, fow, fol,
+            gb: getStatCount(stats['ground-ball']), fow, fol,
             foPct: (fow + fol) > 0 ? Math.round(fow / (fow + fol) * 100) : -1,
-            to: stats.turnover || 0, ta: stats['caused-turnover'] || 0,
-            sv: stats.save || 0, pen: stats.penalty || 0
+            to: getStatCount(stats.turnover), ta: getStatCount(stats['caused-turnover']),
+            sv: getStatCount(stats.save), pen: getStatCount(stats.penalty)
         });
     });
 
@@ -1180,6 +1303,94 @@ function viewGameStats(gameId) {
     }
 
     statsHtml += `</tbody></table></div>`;
+
+    // === GAME LOG (chronological event list) ===
+    const gameLogEvents = [];
+    const statNames = {
+        'faceoff-won': 'Faceoff Won', 'faceoff-lost': 'Faceoff Lost',
+        'ground-ball': 'Ground Ball', 'shot': 'Shot', 'goal': 'Goal',
+        'assist': 'Assist', 'turnover': 'Turnover',
+        'caused-turnover': 'Takeaway', 'save': 'Save', 'penalty': 'Penalty'
+    };
+
+    // Collect player events
+    if (game.stats) {
+        Object.keys(game.stats).forEach(playerId => {
+            const playerStats = game.stats[playerId];
+            const player = roster.find(p => p.id === playerId);
+            if (!player) return;
+
+            Object.keys(playerStats).forEach(statKey => {
+                const val = playerStats[statKey];
+                if (Array.isArray(val)) {
+                    val.forEach(entry => {
+                        if (entry && entry.period) {
+                            gameLogEvents.push({
+                                period: entry.period,
+                                time: entry.time || '',
+                                timeRemaining: entry.timeRemaining != null ? entry.timeRemaining : 0,
+                                label: `#${player.number} ${player.name}`,
+                                stat: statNames[statKey] || statKey,
+                                isGoal: statKey === 'goal',
+                                isOpponent: false
+                            });
+                        }
+                    });
+                }
+            });
+        });
+    }
+
+    // Collect opponent events
+    if (game.opponentStats) {
+        const oppName = game.trackingTeam === 'home' ? game.opponent : (localStorage.getItem(STORAGE_KEYS.TEAM_NAME) || 'Opponent');
+        Object.keys(game.opponentStats).forEach(statKey => {
+            const val = game.opponentStats[statKey];
+            if (Array.isArray(val)) {
+                val.forEach(entry => {
+                    if (entry && entry.period) {
+                        gameLogEvents.push({
+                            period: entry.period,
+                            time: entry.time || '',
+                            timeRemaining: entry.timeRemaining != null ? entry.timeRemaining : 0,
+                            label: oppName,
+                            stat: statNames[statKey] || statKey,
+                            isGoal: statKey === 'goal',
+                            isOpponent: true
+                        });
+                    }
+                });
+            }
+        });
+    }
+
+    if (gameLogEvents.length > 0) {
+        // Sort: period ASC, then timeRemaining DESC (higher time remaining = earlier in period)
+        gameLogEvents.sort((a, b) => {
+            if (a.period !== b.period) return a.period - b.period;
+            return b.timeRemaining - a.timeRemaining;
+        });
+
+        const periodLabel = game.format === 'quarters' ? 'Q' : 'H';
+
+        statsHtml += '<h4 style="margin-top: 1.5rem; color: #1e293b;">Game Log</h4>';
+        statsHtml += '<div style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; margin-top: 0.5rem;">';
+        statsHtml += '<table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+
+        gameLogEvents.forEach((evt, i) => {
+            const bg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
+            const goalStyle = evt.isGoal ? 'font-weight: 700; color: #16a34a;' : '';
+            const oppStyle = evt.isOpponent ? 'color: #dc2626;' : '';
+            statsHtml += `<tr style="background: ${bg}; border-bottom: 1px solid #f1f5f9;">`;
+            statsHtml += `<td style="padding: 0.4rem 0.75rem; white-space: nowrap; color: #64748b; font-family: monospace;">${periodLabel}${evt.period} ${evt.time}</td>`;
+            statsHtml += `<td style="padding: 0.4rem 0.75rem; ${oppStyle}">${evt.label}</td>`;
+            statsHtml += `<td style="padding: 0.4rem 0.75rem; ${goalStyle}">${evt.stat}</td>`;
+            statsHtml += '</tr>';
+        });
+
+        statsHtml += '</table></div>';
+    }
+
     statsHtml += '</div>';
 
     const container = document.createElement('div');
@@ -1241,21 +1452,21 @@ function loadSeasonSummary() {
             const playerSeasonStats = seasonStats[playerId];
 
             // Check if player has any stats in this game
-            const totalGameStats = Object.values(playerGameStats).reduce((a, b) => a + b, 0);
+            const totalGameStats = Object.values(playerGameStats).reduce((a, b) => a + getStatCount(b), 0);
             if (totalGameStats > 0) {
                 playerSeasonStats.gamesPlayed++;
             }
 
-            playerSeasonStats.totalGoals += playerGameStats.goal || 0;
-            playerSeasonStats.totalAssists += playerGameStats.assist || 0;
-            playerSeasonStats.totalShots += playerGameStats.shot || 0;
-            playerSeasonStats.totalGroundBalls += playerGameStats['ground-ball'] || 0;
-            playerSeasonStats.totalFaceoffWon += playerGameStats['faceoff-won'] || 0;
-            playerSeasonStats.totalFaceoffLost += playerGameStats['faceoff-lost'] || 0;
-            playerSeasonStats.totalTurnovers += playerGameStats.turnover || 0;
-            playerSeasonStats.totalCausedTurnovers += playerGameStats['caused-turnover'] || 0;
-            playerSeasonStats.totalSaves += playerGameStats.save || 0;
-            playerSeasonStats.totalPenalties += playerGameStats.penalty || 0;
+            playerSeasonStats.totalGoals += getStatCount(playerGameStats.goal);
+            playerSeasonStats.totalAssists += getStatCount(playerGameStats.assist);
+            playerSeasonStats.totalShots += getStatCount(playerGameStats.shot);
+            playerSeasonStats.totalGroundBalls += getStatCount(playerGameStats['ground-ball']);
+            playerSeasonStats.totalFaceoffWon += getStatCount(playerGameStats['faceoff-won']);
+            playerSeasonStats.totalFaceoffLost += getStatCount(playerGameStats['faceoff-lost']);
+            playerSeasonStats.totalTurnovers += getStatCount(playerGameStats.turnover);
+            playerSeasonStats.totalCausedTurnovers += getStatCount(playerGameStats['caused-turnover']);
+            playerSeasonStats.totalSaves += getStatCount(playerGameStats.save);
+            playerSeasonStats.totalPenalties += getStatCount(playerGameStats.penalty);
         });
     });
 
@@ -1537,7 +1748,12 @@ function showPenaltyTimeSelector(playerId) {
 
 function addPenalty(playerId, playerName, playerNumber, duration) {
     // Record penalty stat
-    currentGame.stats[playerId]['penalty']++;
+    const penTs = recordStatTimestamp();
+    if (Array.isArray(currentGame.stats[playerId]['penalty'])) {
+        currentGame.stats[playerId]['penalty'].push(penTs);
+    } else {
+        currentGame.stats[playerId]['penalty']++;
+    }
 
     // Add to active penalties
     currentGame.activePenalties.push({
@@ -1941,22 +2157,41 @@ function recordVoicePlayerStat(playerId, statType) {
     };
 
     const undoActions = [];
+    const ts = recordStatTimestamp();
 
     // Record the stat
-    currentGame.stats[playerId][statType]++;
-    undoActions.push({ type: 'playerStat', playerId, statType, delta: -1 });
+    if (Array.isArray(currentGame.stats[playerId][statType])) {
+        currentGame.stats[playerId][statType].push(ts);
+        undoActions.push({ type: 'playerStatPop', playerId, statType });
+    } else {
+        currentGame.stats[playerId][statType]++;
+        undoActions.push({ type: 'playerStat', playerId, statType, delta: -1 });
+    }
 
     // Goal: auto-increment score + shot
     if (statType === 'goal') {
-        currentGame.stats[playerId]['shot']++;
-        undoActions.push({ type: 'playerStat', playerId, statType: 'shot', delta: -1 });
+        if (Array.isArray(currentGame.stats[playerId]['shot'])) {
+            currentGame.stats[playerId]['shot'].push(ts);
+            undoActions.push({ type: 'playerStatPop', playerId, statType: 'shot' });
+        } else {
+            currentGame.stats[playerId]['shot']++;
+            undoActions.push({ type: 'playerStat', playerId, statType: 'shot', delta: -1 });
+        }
 
         if (currentGame.trackingTeam === 'home') {
             currentGame.homeScore++;
+            if (currentGame.periodScores) {
+                currentGame.periodScores.home[currentGame.currentPeriod - 1]++;
+                undoActions.push({ type: 'periodScore', team: 'home', period: currentGame.currentPeriod - 1, delta: -1 });
+            }
             document.getElementById('home-score').textContent = currentGame.homeScore;
             undoActions.push({ type: 'score', team: 'home', delta: -1 });
         } else {
             currentGame.awayScore++;
+            if (currentGame.periodScores) {
+                currentGame.periodScores.away[currentGame.currentPeriod - 1]++;
+                undoActions.push({ type: 'periodScore', team: 'away', period: currentGame.currentPeriod - 1, delta: -1 });
+            }
             document.getElementById('away-score').textContent = currentGame.awayScore;
             undoActions.push({ type: 'score', team: 'away', delta: -1 });
         }
@@ -1979,21 +2214,40 @@ function recordVoiceOpponentStat(statType) {
     };
 
     const undoActions = [];
+    const ts = recordStatTimestamp();
 
-    currentGame.opponentStats[statType]++;
-    undoActions.push({ type: 'opponentStat', statType, delta: -1 });
+    if (Array.isArray(currentGame.opponentStats[statType])) {
+        currentGame.opponentStats[statType].push(ts);
+        undoActions.push({ type: 'opponentStatPop', statType });
+    } else {
+        currentGame.opponentStats[statType]++;
+        undoActions.push({ type: 'opponentStat', statType, delta: -1 });
+    }
 
     if (statType === 'goal') {
-        currentGame.opponentStats['shot']++;
-        undoActions.push({ type: 'opponentStat', statType: 'shot', delta: -1 });
+        if (Array.isArray(currentGame.opponentStats['shot'])) {
+            currentGame.opponentStats['shot'].push(ts);
+            undoActions.push({ type: 'opponentStatPop', statType: 'shot' });
+        } else {
+            currentGame.opponentStats['shot']++;
+            undoActions.push({ type: 'opponentStat', statType: 'shot', delta: -1 });
+        }
 
         // Opponent's score depends on tracking team
         if (currentGame.trackingTeam === 'home') {
             currentGame.awayScore++;
+            if (currentGame.periodScores) {
+                currentGame.periodScores.away[currentGame.currentPeriod - 1]++;
+                undoActions.push({ type: 'periodScore', team: 'away', period: currentGame.currentPeriod - 1, delta: -1 });
+            }
             document.getElementById('away-score').textContent = currentGame.awayScore;
             undoActions.push({ type: 'score', team: 'away', delta: -1 });
         } else {
             currentGame.homeScore++;
+            if (currentGame.periodScores) {
+                currentGame.periodScores.home[currentGame.currentPeriod - 1]++;
+                undoActions.push({ type: 'periodScore', team: 'home', period: currentGame.currentPeriod - 1, delta: -1 });
+            }
             document.getElementById('home-score').textContent = currentGame.homeScore;
             undoActions.push({ type: 'score', team: 'home', delta: -1 });
         }
@@ -2050,10 +2304,22 @@ function undoLastVoiceStat() {
 
     // Reverse each action
     for (const action of last.actions) {
-        if (action.type === 'playerStat') {
+        if (action.type === 'playerStatPop') {
+            if (Array.isArray(currentGame.stats[action.playerId][action.statType])) {
+                currentGame.stats[action.playerId][action.statType].pop();
+            }
+        } else if (action.type === 'playerStat') {
             currentGame.stats[action.playerId][action.statType] += action.delta;
+        } else if (action.type === 'opponentStatPop') {
+            if (Array.isArray(currentGame.opponentStats[action.statType])) {
+                currentGame.opponentStats[action.statType].pop();
+            }
         } else if (action.type === 'opponentStat') {
             currentGame.opponentStats[action.statType] += action.delta;
+        } else if (action.type === 'periodScore') {
+            if (currentGame.periodScores) {
+                currentGame.periodScores[action.team][action.period] = Math.max(0, currentGame.periodScores[action.team][action.period] + action.delta);
+            }
         } else if (action.type === 'score') {
             if (action.team === 'home') {
                 currentGame.homeScore += action.delta;
