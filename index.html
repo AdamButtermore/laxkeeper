@@ -4,9 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
     <title>LaxKeeper - Lacrosse Stats Tracker</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
 </head>
 <body>
     <div id="app">
@@ -340,5 +344,14 @@
     <script src="firebase-config.js"></script>
     <script src="firebase-sync.js"></script>
     <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('service-worker.js').then(function () {
+                console.log('[SW] Service worker registered');
+            }).catch(function (err) {
+                console.error('[SW] Registration failed:', err);
+            });
+        }
+    </script>
 </body>
 </html>
