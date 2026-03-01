@@ -349,7 +349,8 @@
 
                 <div class="settings-section">
                     <h3>Data Management</h3>
-                    <button class="btn-secondary" onclick="exportData()">📥 Export Data</button>
+                    <button class="btn-secondary" onclick="exportData()">📥 Export Data (JSON)</button>
+                    <button class="btn-secondary" onclick="exportCSV()">📊 Export Stats (CSV)</button>
                     <button class="btn-secondary" onclick="importData()">📤 Import Data</button>
                     <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
                 </div>

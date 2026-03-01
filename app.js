@@ -1920,6 +1920,112 @@ function exportData() {
     URL.revokeObjectURL(url);
 }
 
+function exportCSV() {
+    const games = getGames().filter(g => g.status === 'completed');
+    const roster = getRoster();
+    const teamName = localStorage.getItem(STORAGE_KEYS.TEAM_NAME) || 'Team';
+
+    if (games.length === 0) {
+        alert('No completed games to export.');
+        return;
+    }
+
+    const sortedGames = [...games].sort((a, b) => new Date(a.completedAt || a.datetime) - new Date(b.completedAt || b.datetime));
+
+    // Build CSV rows: one row per player per game + season totals row per player
+    const headers = ['Player', 'Number', 'Position', 'Game', 'Date', 'Result', 'Score', 'Goals', 'Assists', 'Points', 'Shots', 'Shot%', 'Ground Balls', 'Faceoff Wins', 'Faceoff Losses', 'FO%', 'Turnovers', 'Caused Turnovers', 'Saves', 'Penalties'];
+    const rows = [headers];
+
+    roster.forEach(player => {
+        const totals = { g: 0, a: 0, sh: 0, gb: 0, fow: 0, fol: 0, to: 0, ta: 0, sv: 0, pen: 0 };
+        let gamesPlayed = 0;
+
+        sortedGames.forEach(game => {
+            if (!game.stats || !game.stats[player.id]) return;
+            gamesPlayed++;
+            const ps = game.stats[player.id];
+            const g = getStatCount(ps.goal);
+            const a = getStatCount(ps.assist);
+            const sh = getStatCount(ps.shot);
+            const gb = getStatCount(ps['ground-ball']);
+            const fow = getStatCount(ps['faceoff-won']);
+            const fol = getStatCount(ps['faceoff-lost']);
+            const to = getStatCount(ps.turnover);
+            const ta = getStatCount(ps['caused-turnover']);
+            const sv = getStatCount(ps.save);
+            const pen = getStatCount(ps.penalty);
+            const pts = g + a;
+            const shPct = sh > 0 ? Math.round(g / sh * 100) : 0;
+            const foPct = (fow + fol) > 0 ? Math.round(fow / (fow + fol) * 100) : 0;
+
+            totals.g += g; totals.a += a; totals.sh += sh; totals.gb += gb;
+            totals.fow += fow; totals.fol += fol; totals.to += to;
+            totals.ta += ta; totals.sv += sv; totals.pen += pen;
+
+            const date = new Date(game.completedAt || game.datetime);
+            const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+            const result = game.homeScore > game.awayScore ? 'W' : game.homeScore < game.awayScore ? 'L' : 'T';
+            const score = `${game.homeScore}-${game.awayScore}`;
+
+            rows.push([
+                player.name, player.number, player.position || '',
+                `vs ${game.opponent}`, dateStr, result, score,
+                g, a, pts, sh, shPct + '%', gb, fow, fol, foPct + '%', to, ta, sv, pen
+            ]);
+        });
+
+        // Season totals row for this player
+        if (gamesPlayed > 0) {
+            const tPts = totals.g + totals.a;
+            const tShPct = totals.sh > 0 ? Math.round(totals.g / totals.sh * 100) : 0;
+            const tFoPct = (totals.fow + totals.fol) > 0 ? Math.round(totals.fow / (totals.fow + totals.fol) * 100) : 0;
+            rows.push([
+                player.name, player.number, player.position || '',
+                `SEASON TOTAL (${gamesPlayed} GP)`, '', '', '',
+                totals.g, totals.a, tPts, totals.sh, tShPct + '%', totals.gb, totals.fow, totals.fol, tFoPct + '%', totals.to, totals.ta, totals.sv, totals.pen
+            ]);
+        }
+    });
+
+    // Add opponent stats section
+    rows.push([]);
+    rows.push(['--- OPPONENT STATS ---']);
+    rows.push(['Opponent', '', '', 'Game', 'Date', 'Result', 'Score', 'Goals', '', '', 'Shots', '', 'Ground Balls', '', '', '', 'Turnovers', 'Caused Turnovers', 'Saves', '']);
+
+    sortedGames.forEach(game => {
+        if (!game.opponentStats) return;
+        const os = game.opponentStats;
+        const date = new Date(game.completedAt || game.datetime);
+        const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+        const result = game.homeScore > game.awayScore ? 'W' : game.homeScore < game.awayScore ? 'L' : 'T';
+        const score = `${game.homeScore}-${game.awayScore}`;
+        rows.push([
+            game.opponent, '', '', `vs ${teamName}`, dateStr, result, score,
+            getStatCount(os.goal), '', '', getStatCount(os.shot), '', getStatCount(os['ground-ball']),
+            '', '', '', getStatCount(os.turnover), getStatCount(os['caused-turnover']),
+            getStatCount(os.save), ''
+        ]);
+    });
+
+    // Convert to CSV string
+    const csvContent = rows.map(row =>
+        row.map(cell => {
+            const str = String(cell === undefined || cell === null ? '' : cell);
+            return str.includes(',') || str.includes('"') || str.includes('\n')
+                ? '"' + str.replace(/"/g, '""') + '"'
+                : str;
+        }).join(',')
+    ).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `laxtracular-stats-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
 function importData() {
     document.getElementById('import-file').click();
 }
