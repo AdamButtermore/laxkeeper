@@ -1059,38 +1059,59 @@ function viewGameStats(gameId) {
                 </thead>
                 <tbody>`;
 
-    let hasStats = false;
+    // Collect player rows first to find column maximums
+    const playerRows = [];
     [...roster].sort((a, b) => Number(a.number) - Number(b.number)).forEach(player => {
         const stats = game.stats[player.id];
         if (!stats) return;
-
-        const goals = stats.goal || 0;
-        const assists = stats.assist || 0;
-        const points = goals + assists;
         const totalStats = Object.values(stats).reduce((a, b) => a + b, 0);
         if (totalStats === 0) return;
+        const goals = stats.goal || 0;
+        const assists = stats.assist || 0;
+        const shots = stats.shot || 0;
+        const fow = stats['faceoff-won'] || 0;
+        const fol = stats['faceoff-lost'] || 0;
+        playerRows.push({
+            player, goals, assists, points: goals + assists, shots,
+            shotPct: shots > 0 ? Math.round(goals / shots * 100) : -1,
+            gb: stats['ground-ball'] || 0, fow, fol,
+            foPct: (fow + fol) > 0 ? Math.round(fow / (fow + fol) * 100) : -1,
+            to: stats.turnover || 0, ta: stats['caused-turnover'] || 0,
+            sv: stats.save || 0, pen: stats.penalty || 0
+        });
+    });
 
-        hasStats = true;
+    // Find max for each column (only among values > 0)
+    const colKeys = ['goals','assists','points','shots','shotPct','gb','fow','fol','foPct','ta','sv'];
+    const maxVals = {};
+    colKeys.forEach(k => {
+        const vals = playerRows.map(r => r[k]).filter(v => v > 0);
+        maxVals[k] = vals.length > 0 ? Math.max(...vals) : -1;
+    });
+
+    const grn = (val, key) => val > 0 && val === maxVals[key] ? 'color: #16a34a; font-weight: 700;' : '';
+
+    playerRows.forEach(r => {
         statsHtml += `
             <tr style="border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 0.5rem; font-weight: 600; position: sticky; left: 0; background: white; z-index: 1; white-space: nowrap;">#${player.number} ${player.name}</td>
-                <td style="padding: 0.5rem; text-align: center;">${goals}</td>
-                <td style="padding: 0.5rem; text-align: center;">${assists}</td>
-                <td style="padding: 0.5rem; text-align: center; font-weight: 600;">${points}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats.shot || 0}</td>
-                <td style="padding: 0.5rem; text-align: center;">${(stats.shot || 0) > 0 ? Math.round(goals / (stats.shot || 1) * 100) + '%' : '-'}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats['ground-ball'] || 0}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats['faceoff-won'] || 0}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats['faceoff-lost'] || 0}</td>
-                <td style="padding: 0.5rem; text-align: center;">${((stats['faceoff-won'] || 0) + (stats['faceoff-lost'] || 0)) > 0 ? Math.round((stats['faceoff-won'] || 0) / ((stats['faceoff-won'] || 0) + (stats['faceoff-lost'] || 0)) * 100) + '%' : '-'}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats.turnover || 0}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats['caused-turnover'] || 0}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats.save || 0}</td>
-                <td style="padding: 0.5rem; text-align: center;">${stats.penalty || 0}</td>
+                <td style="padding: 0.5rem; font-weight: 600; position: sticky; left: 0; background: white; z-index: 1; white-space: nowrap;">#${r.player.number} ${r.player.name}</td>
+                <td style="padding: 0.5rem; text-align: center; ${grn(r.goals,'goals')}">${r.goals}</td>
+                <td style="padding: 0.5rem; text-align: center; ${grn(r.assists,'assists')}">${r.assists}</td>
+                <td style="padding: 0.5rem; text-align: center; font-weight: 600; ${grn(r.points,'points')}">${r.points}</td>
+                <td style="padding: 0.5rem; text-align: center; ${grn(r.shots,'shots')}">${r.shots}</td>
+                <td style="padding: 0.5rem; text-align: center; ${grn(r.shotPct,'shotPct')}">${r.shotPct >= 0 ? r.shotPct + '%' : '-'}</td>
+                <td style="padding: 0.5rem; text-align: center; ${grn(r.gb,'gb')}">${r.gb}</td>
+                <td style="padding: 0.5rem; text-align: center; ${grn(r.fow,'fow')}">${r.fow}</td>
+                <td style="padding: 0.5rem; text-align: center; ${grn(r.fol,'fol')}">${r.fol}</td>
+                <td style="padding: 0.5rem; text-align: center; ${grn(r.foPct,'foPct')}">${r.foPct >= 0 ? r.foPct + '%' : '-'}</td>
+                <td style="padding: 0.5rem; text-align: center;">${r.to}</td>
+                <td style="padding: 0.5rem; text-align: center; ${grn(r.ta,'ta')}">${r.ta}</td>
+                <td style="padding: 0.5rem; text-align: center; ${grn(r.sv,'sv')}">${r.sv}</td>
+                <td style="padding: 0.5rem; text-align: center;">${r.pen}</td>
             </tr>`;
     });
 
-    if (!hasStats) {
+    if (playerRows.length === 0) {
         statsHtml += `<tr><td colspan="14" style="padding: 1rem; text-align: center; color: #64748b; font-style: italic;">No stats recorded</td></tr>`;
     }
 
@@ -1220,23 +1241,36 @@ function loadSeasonSummary() {
                 </thead>
                 <tbody>`;
 
+    // Find column maximums for green highlighting
+    const seasonColKeys = ['totalGoals','totalAssists','totalPoints','totalShots','seasonShPct','totalGroundBalls','totalFaceoffWon','totalFaceoffLost','seasonFoPct','totalCausedTurnovers','totalSaves'];
+    const seasonMax = {};
+    sortedPlayers.forEach(s => {
+        s.seasonShPct = s.totalShots > 0 ? Math.round(s.totalGoals / s.totalShots * 100) : -1;
+        s.seasonFoPct = (s.totalFaceoffWon + s.totalFaceoffLost) > 0 ? Math.round(s.totalFaceoffWon / (s.totalFaceoffWon + s.totalFaceoffLost) * 100) : -1;
+    });
+    seasonColKeys.forEach(k => {
+        const vals = sortedPlayers.map(s => s[k]).filter(v => v > 0);
+        seasonMax[k] = vals.length > 0 ? Math.max(...vals) : -1;
+    });
+    const sGrn = (val, key) => val > 0 && val === seasonMax[key] ? 'color: #16a34a; font-weight: 700;' : 'color: var(--text-primary);';
+
     sortedPlayers.forEach(stats => {
         html += `
             <tr style="border-bottom: 1px solid var(--border-color);">
                 <td style="padding: 0.6rem 0.4rem; font-weight: 600; color: var(--text-primary); position: sticky; left: 0; background: var(--card-bg);">#${stats.player.number} ${stats.player.name}</td>
                 <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.gamesPlayed}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalGoals}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalAssists}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700; color: var(--success-color);">${stats.totalPoints}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalShots}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalShots > 0 ? Math.round(stats.totalGoals / stats.totalShots * 100) + '%' : '-'}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalGroundBalls}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalFaceoffWon}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalFaceoffLost}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${(stats.totalFaceoffWon + stats.totalFaceoffLost) > 0 ? Math.round(stats.totalFaceoffWon / (stats.totalFaceoffWon + stats.totalFaceoffLost) * 100) + '%' : '-'}</td>
+                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalGoals,'totalGoals')}">${stats.totalGoals}</td>
+                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalAssists,'totalAssists')}">${stats.totalAssists}</td>
+                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalPoints,'totalPoints')}">${stats.totalPoints}</td>
+                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalShots,'totalShots')}">${stats.totalShots}</td>
+                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.seasonShPct,'seasonShPct')}">${stats.seasonShPct >= 0 ? stats.seasonShPct + '%' : '-'}</td>
+                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalGroundBalls,'totalGroundBalls')}">${stats.totalGroundBalls}</td>
+                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalFaceoffWon,'totalFaceoffWon')}">${stats.totalFaceoffWon}</td>
+                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalFaceoffLost,'totalFaceoffLost')}">${stats.totalFaceoffLost}</td>
+                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.seasonFoPct,'seasonFoPct')}">${stats.seasonFoPct >= 0 ? stats.seasonFoPct + '%' : '-'}</td>
                 <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalTurnovers}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalCausedTurnovers}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalSaves}</td>
+                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalCausedTurnovers,'totalCausedTurnovers')}">${stats.totalCausedTurnovers}</td>
+                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalSaves,'totalSaves')}">${stats.totalSaves}</td>
                 <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalPenalties}</td>
             </tr>`;
     });

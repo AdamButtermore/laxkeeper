@@ -1,7 +1,7 @@
 // LaxKeeper Service Worker
 // Caches app shell for offline use and fast loading
 
-var CACHE_NAME = 'laxkeeper-v4';
+var CACHE_NAME = 'laxkeeper-v5';
 var URLS_TO_CACHE = [
     '/laxkeeper/',
     '/laxkeeper/index.html',
