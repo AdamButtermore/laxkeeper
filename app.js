@@ -927,7 +927,7 @@ function editGameStats(gameId) {
 
     const roster = getRoster();
     const statKeys = ['goal', 'assist', 'shot', 'ground-ball', 'faceoff-won', 'faceoff-lost', 'turnover', 'caused-turnover', 'save', 'penalty'];
-    const statLabels = ['G', 'A', 'Sh', 'GB', 'FOW', 'FOL', 'TO', 'TA', 'Sv', 'Pen'];
+    const statLabels = ['Goals', 'Assists', 'Shots', 'Ground Balls', 'Faceoff Wins', 'Faceoff Losses', 'Turnovers', 'Takeaways', 'Saves', 'Penalties'];
 
     let html = '<div style="padding: 1rem; background: white; border-radius: 8px; max-width: 900px; margin: auto; color: #1e293b;">';
     html += `<h3 style="color: #1e293b;">Edit Stats: vs ${game.opponent}</h3>`;
@@ -1042,17 +1042,17 @@ function viewGameStats(gameId) {
                 <thead>
                     <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
                         <th style="padding: 0.5rem; text-align: left; font-weight: 700;">Player</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">G</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">A</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Pts</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Sh</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">GB</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">FOW</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">FOL</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">TO</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">TA</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Sv</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Pen</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Goals</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Assists</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Points</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Shots</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Ground Balls</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Faceoff Wins</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Faceoff Losses</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Turnovers</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Takeaways</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Saves</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Penalties</th>
                     </tr>
                 </thead>
                 <tbody>`;
