@@ -188,6 +188,7 @@ function showScreen(screenId) {
     if (screenId === 'history-screen') loadGameHistory();
     if (screenId === 'season-summary-screen') loadSeasonSummary();
     if (screenId === 'settings-screen') loadSettings();
+    if (screenId === 'about-screen') renderAboutShotChartExample();
 }
 
 // ===== ROSTER MANAGEMENT =====
@@ -836,6 +837,7 @@ function selectPlayerForStat(playerId) {
         // Show feedback
         const btn = event.target.closest('.player-btn');
         btn.classList.add('stat-flash');
+        if (navigator.vibrate) navigator.vibrate(50);
 
         setTimeout(() => {
             btn.classList.remove('stat-flash');
@@ -853,6 +855,7 @@ function selectPlayerForStat(playerId) {
     // Show feedback
     const btn = event.target.closest('.player-btn');
     btn.classList.add('stat-flash');
+    if (navigator.vibrate) navigator.vibrate(50);
 
     setTimeout(() => {
         btn.classList.remove('stat-flash');
@@ -915,6 +918,7 @@ function recordOpponentStat() {
     // Show feedback
     const btn = event.target;
     btn.classList.add('stat-flash');
+    if (navigator.vibrate) navigator.vibrate(50);
 
     setTimeout(() => {
         btn.classList.remove('stat-flash');
@@ -1321,6 +1325,42 @@ function buildShotChartSVG(shots, options) {
             <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444;margin-right:4px;"></span>Missed (${shotCount})</span>
         </div>
     </div>`;
+}
+
+// Sample shot chart for the Get Started / About screen
+function renderAboutShotChartExample() {
+    const container = document.getElementById('about-shot-chart-example');
+    if (!container) return;
+    // Realistic sample data: mix of goals and misses from various positions
+    const sampleShots = [
+        // Close-range goals (near crease)
+        { x: 0.48, y: 0.18, isGoal: true },
+        { x: 0.53, y: 0.22, isGoal: true },
+        { x: 0.42, y: 0.25, isGoal: true },
+        { x: 0.56, y: 0.16, isGoal: true },
+        // Mid-range goals
+        { x: 0.38, y: 0.35, isGoal: true },
+        { x: 0.60, y: 0.30, isGoal: true },
+        // Long-range goal
+        { x: 0.50, y: 0.55, isGoal: true },
+        // Missed shots - close range
+        { x: 0.45, y: 0.20, isGoal: false },
+        { x: 0.55, y: 0.24, isGoal: false },
+        // Missed shots - wings
+        { x: 0.22, y: 0.38, isGoal: false },
+        { x: 0.78, y: 0.35, isGoal: false },
+        { x: 0.25, y: 0.28, isGoal: false },
+        { x: 0.75, y: 0.30, isGoal: false },
+        // Missed shots - mid range
+        { x: 0.40, y: 0.42, isGoal: false },
+        { x: 0.58, y: 0.45, isGoal: false },
+        { x: 0.50, y: 0.38, isGoal: false },
+        // Missed shots - outside
+        { x: 0.35, y: 0.60, isGoal: false },
+        { x: 0.65, y: 0.58, isGoal: false },
+        { x: 0.50, y: 0.65, isGoal: false },
+    ];
+    container.innerHTML = buildShotChartSVG(sampleShots);
 }
 
 // ===== IN-GAME EDIT LOG =====
@@ -3171,15 +3211,15 @@ function initVoiceRecognition() {
         micBtn.classList.remove('listening');
         micBtn.classList.add('processing');
 
-        // Try each alternative transcript
-        let parsed = null;
+        // Try each alternative transcript (multi-stat chaining)
+        let parsedList = [];
         for (let i = 0; i < event.results[0].length; i++) {
             const transcript = event.results[0][i].transcript;
 
             if (event.results[0].isFinal || !voiceRecognition.interimResults) {
                 showVoiceFeedback('Processing...', transcript);
-                parsed = parseVoiceCommand(transcript);
-                if (parsed) break;
+                parsedList = parseVoiceCommands(transcript);
+                if (parsedList.length > 0) break;
             } else {
                 // Interim result - just show transcript
                 showVoiceFeedback('Listening...', transcript);
@@ -3187,8 +3227,20 @@ function initVoiceRecognition() {
             }
         }
 
-        if (parsed) {
-            executeVoiceCommand(parsed);
+        if (parsedList.length === 1) {
+            // Single command — use original flow (with feedback/prompts)
+            executeVoiceCommand(parsedList[0]);
+        } else if (parsedList.length > 1) {
+            // Multi-stat chain — execute silently, aggregate feedback
+            const descriptions = [];
+            for (const parsed of parsedList) {
+                const desc = executeVoiceCommand(parsed, { silent: true });
+                if (desc) descriptions.push(desc);
+            }
+            if (descriptions.length > 0) {
+                showVoiceFeedback('Recorded!', descriptions.join(', '));
+                setTimeout(hideVoiceFeedback, 2000);
+            }
         } else {
             const heard = event.results[0][0].transcript;
             showVoiceFeedback(
@@ -3417,41 +3469,112 @@ function parseVoiceCommand(rawText) {
     };
 }
 
+// ===== MULTI-STAT CHAINING =====
+// Stat keywords used for boundary detection (no-conjunction splitting)
+const STAT_KEYWORDS = new Set(
+    STAT_TRIGGERS.flatMap(t => t.phrases.flatMap(p => [p.split(' ')[0]]))
+);
+// Also include common aliases that map to stat keywords
+for (const [alias, canonical] of Object.entries(VOICE_ALIASES)) {
+    if (STAT_KEYWORDS.has(canonical)) STAT_KEYWORDS.add(alias);
+}
+
+function parseVoiceCommands(rawText) {
+    // 1. Split on commas, " and ", " then " (common chaining conjunctions)
+    const segments = rawText
+        .split(/\s*,\s*|\s+and\s+|\s+then\s+/i)
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+
+    if (segments.length > 1) {
+        const results = segments.map(seg => parseVoiceCommand(seg)).filter(Boolean);
+        if (results.length > 0) return results;
+    }
+
+    // 2. No conjunctions found (or conjunction split produced nothing).
+    //    Try boundary detection: find consecutive [stat-word][number] pairs.
+    const converted = convertSpokenNumbers(rawText.toLowerCase().trim());
+    const words = converted.split(/\s+/);
+    const boundaries = [];
+
+    for (let i = 0; i < words.length; i++) {
+        const aliased = VOICE_ALIASES[words[i]] || words[i];
+        if (STAT_KEYWORDS.has(aliased) || STAT_KEYWORDS.has(words[i])) {
+            boundaries.push(i);
+        }
+    }
+
+    if (boundaries.length >= 2) {
+        const boundarySegments = [];
+        for (let b = 0; b < boundaries.length; b++) {
+            const start = boundaries[b];
+            const end = b + 1 < boundaries.length ? boundaries[b + 1] : words.length;
+            boundarySegments.push(words.slice(start, end).join(' '));
+        }
+        // Use original rawText words for parsing (convertSpokenNumbers is called inside parseVoiceCommand)
+        const rawWords = rawText.toLowerCase().trim().split(/\s+/);
+        const rawSegments = [];
+        for (let b = 0; b < boundaries.length; b++) {
+            const start = boundaries[b];
+            const end = b + 1 < boundaries.length ? boundaries[b + 1] : rawWords.length;
+            rawSegments.push(rawWords.slice(start, end).join(' '));
+        }
+        const results = rawSegments.map(seg => parseVoiceCommand(seg)).filter(Boolean);
+        if (results.length >= 2) return results;
+    }
+
+    // 3. Fall back to single command (current behavior)
+    const single = parseVoiceCommand(rawText);
+    return single ? [single] : [];
+}
+
 // ===== VOICE COMMAND EXECUTION =====
-function executeVoiceCommand(parsed) {
+// Returns description string on success, null on failure.
+// When silent=true, suppresses feedback/undo (caller handles it for multi-stat).
+function executeVoiceCommand(parsed, { silent = false } = {}) {
     if (!currentGame) {
-        showVoiceFeedback('No active game', 'Start a game first');
-        setTimeout(hideVoiceFeedback, 2000);
-        return;
+        if (!silent) {
+            showVoiceFeedback('No active game', 'Start a game first');
+            setTimeout(hideVoiceFeedback, 2000);
+        }
+        return null;
     }
 
     // Handle clear commands (team-level, no player needed)
     if (parsed.stat === 'clear') {
         recordClear('home', true);
-        return;
+        if (navigator.vibrate) navigator.vibrate(50);
+        return 'Clear';
     }
     if (parsed.stat === 'failed-clear') {
         recordClear('home', false);
-        return;
+        if (navigator.vibrate) navigator.vibrate(50);
+        return 'Failed Clear';
     }
     if (parsed.stat === 'opp-clear') {
         recordClear('away', true);
-        return;
+        if (navigator.vibrate) navigator.vibrate(50);
+        return 'Opp Clear';
     }
     if (parsed.stat === 'opp-failed-clear') {
         recordClear('away', false);
-        return;
+        if (navigator.vibrate) navigator.vibrate(50);
+        return 'Opp Failed Clear';
     }
 
     if (parsed.isOpponent && !parsed.playerNumber) {
         // Opponent stat
         const result = recordVoiceOpponentStat(parsed.stat);
         if (result) {
-            showVoiceFeedback('Recorded!', result.description);
+            if (!silent) {
+                showVoiceFeedback('Recorded!', result.description);
+            }
             pushUndo(result.undoActions, result.description);
+            if (navigator.vibrate) navigator.vibrate(50);
+            if (!silent) setTimeout(hideVoiceFeedback, 1500);
+            return result.description;
         }
-        setTimeout(hideVoiceFeedback, 1500);
-        return;
+        return null;
     }
 
     if (parsed.playerNumber) {
@@ -3460,49 +3583,62 @@ function executeVoiceCommand(parsed) {
         const player = roster.find(p => p.number === parsed.playerNumber);
 
         if (!player) {
-            showVoiceFeedback('Player not found', `No player #${parsed.playerNumber} on roster`);
-            setTimeout(hideVoiceFeedback, 3000);
-            return;
+            if (!silent) {
+                showVoiceFeedback('Player not found', `No player #${parsed.playerNumber} on roster`);
+                setTimeout(hideVoiceFeedback, 3000);
+            }
+            return null;
         }
 
         // Handle penalty - open time selector
         if (parsed.stat === 'penalty') {
-            showVoiceFeedback('Select penalty time', `Penalty for #${player.number} ${player.name}`);
-            setTimeout(() => {
-                hideVoiceFeedback();
-                showPenaltyTimeSelector(player.id);
-            }, 800);
-            return;
+            if (!silent) {
+                showVoiceFeedback('Select penalty time', `Penalty for #${player.number} ${player.name}`);
+                setTimeout(() => {
+                    hideVoiceFeedback();
+                    showPenaltyTimeSelector(player.id);
+                }, 800);
+            }
+            return `Penalty #${player.number}`;
         }
 
         const result = recordVoicePlayerStat(player.id, parsed.stat);
         if (result) {
-            showVoiceFeedback('Recorded!', result.description);
-            pushUndo(result.undoActions, result.description);
-
-            // Prompt for shot location, then assist for goals
-            if (parsed.stat === 'goal') {
-                const goalTs = result.timestamp;
-                voiceAssistTimeout = setTimeout(() => {
-                    hideVoiceFeedback();
-                    promptShotLocation(goalTs, () => {
-                        promptForAssist(player.id, goalTs);
-                    });
-                }, 800);
-            } else if (parsed.stat === 'shot') {
-                setTimeout(() => {
-                    hideVoiceFeedback();
-                    promptShotLocation(result.timestamp, () => {});
-                }, 800);
-            } else {
-                setTimeout(hideVoiceFeedback, 1500);
+            if (!silent) {
+                showVoiceFeedback('Recorded!', result.description);
             }
+            pushUndo(result.undoActions, result.description);
+            if (navigator.vibrate) navigator.vibrate(50);
+
+            if (!silent) {
+                // Prompt for shot location, then assist for goals
+                if (parsed.stat === 'goal') {
+                    const goalTs = result.timestamp;
+                    voiceAssistTimeout = setTimeout(() => {
+                        hideVoiceFeedback();
+                        promptShotLocation(goalTs, () => {
+                            promptForAssist(player.id, goalTs);
+                        });
+                    }, 800);
+                } else if (parsed.stat === 'shot') {
+                    setTimeout(() => {
+                        hideVoiceFeedback();
+                        promptShotLocation(result.timestamp, () => {});
+                    }, 800);
+                } else {
+                    setTimeout(hideVoiceFeedback, 1500);
+                }
+            }
+            return result.description;
         }
-        return;
+        return null;
     }
 
-    showVoiceFeedback('Need a player number', 'Try: "goal 7" or "opponent ground ball"');
-    setTimeout(hideVoiceFeedback, 3000);
+    if (!silent) {
+        showVoiceFeedback('Need a player number', 'Try: "goal 7" or "opponent ground ball"');
+        setTimeout(hideVoiceFeedback, 3000);
+    }
+    return null;
 }
 
 // ===== VOICE STAT RECORDING (decoupled from tap DOM events) =====
