@@ -1,6 +1,6 @@
 {
-  "name": "LaxKeeper - Lacrosse Stats Tracker",
-  "short_name": "LaxKeeper",
+  "name": "Laxtracular - Lacrosse Stats Tracker",
+  "short_name": "Laxtracular",
   "description": "Track lacrosse game stats in real-time",
   "start_url": "/",
   "scope": "/",
