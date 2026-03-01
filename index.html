@@ -49,38 +49,62 @@
                 <h3>New here? Tap to get started with Laxtracular →</h3>
             </div>
 
-            <nav class="main-nav">
-                <button class="nav-btn" onclick="showScreen('about-screen')">
+            <nav class="main-nav nav-cards">
+                <button class="nav-btn nav-card" onclick="showScreen('about-screen')">
                     <span class="icon">❓</span>
-                    <span>Get Started</span>
+                    <div class="nav-card-text">
+                        <span class="nav-card-title">Get Started</span>
+                        <span class="nav-card-desc">Learn the basics and how to use the app</span>
+                    </div>
                 </button>
-                <button class="nav-btn" onclick="showScreen('guide-screen')">
+                <button class="nav-btn nav-card" onclick="showScreen('guide-screen')">
                     <span class="icon">📖</span>
-                    <span>Stat Guide</span>
+                    <div class="nav-card-text">
+                        <span class="nav-card-title">Stat Guide</span>
+                        <span class="nav-card-desc">Stat definitions and voice commands</span>
+                    </div>
                 </button>
-                <button class="nav-btn" onclick="showScreen('roster-screen')">
+                <button class="nav-btn nav-card" onclick="showScreen('roster-screen')">
                     <span class="icon">👥</span>
-                    <span>Manage Roster</span>
+                    <div class="nav-card-text">
+                        <span class="nav-card-title">Manage Roster</span>
+                        <span class="nav-card-desc">Add and edit your players</span>
+                    </div>
                 </button>
-                <button class="nav-btn" onclick="showScreen('schedule-screen')">
+                <button class="nav-btn nav-card" onclick="showScreen('schedule-screen')">
                     <span class="icon">📅</span>
-                    <span>Schedule Game</span>
+                    <div class="nav-card-text">
+                        <span class="nav-card-title">Schedule Game</span>
+                        <span class="nav-card-desc">Set up your next game</span>
+                    </div>
                 </button>
-                <button class="nav-btn" onclick="showScreen('games-screen')">
+                <button class="nav-btn nav-card" onclick="showScreen('games-screen')">
                     <span class="icon">🎮</span>
-                    <span>Start Game</span>
+                    <div class="nav-card-text">
+                        <span class="nav-card-title">Start Game</span>
+                        <span class="nav-card-desc">Begin tracking a live game</span>
+                    </div>
                 </button>
-                <button class="nav-btn" onclick="showScreen('history-screen')">
+                <button class="nav-btn nav-card" onclick="showScreen('history-screen')">
                     <span class="icon">📊</span>
-                    <span>Game History</span>
+                    <div class="nav-card-text">
+                        <span class="nav-card-title">Game History</span>
+                        <span class="nav-card-desc">Review past games and stats</span>
+                    </div>
                 </button>
-                <button class="nav-btn" onclick="showScreen('season-summary-screen')">
+                <button class="nav-btn nav-card" onclick="showScreen('season-summary-screen')">
                     <span class="icon">📈</span>
-                    <span>Season Summary</span>
+                    <div class="nav-card-text">
+                        <span class="nav-card-title">Season Summary</span>
+                        <span class="nav-card-desc">Full season stats and averages</span>
+                    </div>
                 </button>
-                <button class="nav-btn" onclick="showScreen('settings-screen')">
+                <button class="nav-btn nav-card" onclick="showScreen('settings-screen')">
                     <span class="icon">⚙️</span>
-                    <span>Settings</span>
+                    <div class="nav-card-text">
+                        <span class="nav-card-title">Settings</span>
+                        <span class="nav-card-desc">Team setup, data export, and preferences</span>
+                    </div>
                 </button>
             </nav>
         </div>
@@ -382,12 +406,62 @@
                     <p class="about-tagline">What every stat means and how to call it — based on NFHS and USA Lacrosse official guidelines.</p>
                 </div>
 
+                <!-- Voice Commands Quick Reference -->
                 <div class="about-section">
+                    <div class="about-section-icon">🎙️</div>
+                    <h3>Voice Commands</h3>
+                    <p class="about-intro">Tap the microphone button and speak naturally. Say the stat followed by the jersey number. The app uses fuzzy matching — you don't have to be exact.</p>
+                    <div class="about-card">
+                        <h4>Player Stats</h4>
+                        <div class="about-examples">
+                            <code>"Goal 12"</code>
+                            <code>"Shot 7"</code>
+                            <code>"Save 1"</code>
+                            <code>"Assist 8"</code>
+                            <code>"Ground ball 22"</code>
+                            <code>"Faceoff win 14"</code>
+                            <code>"Faceoff loss 14"</code>
+                            <code>"Turnover 5"</code>
+                            <code>"Takeaway 8"</code>
+                            <code>"Penalty 3"</code>
+                        </div>
+                        <div class="about-detail"><strong>Goals</strong> automatically record a shot, update the score, and prompt you to pick the assisting player.</div>
+                        <div class="about-detail"><strong>Penalties</strong> open a duration picker (30s to 3 min) and start a live countdown on the scoreboard.</div>
+                    </div>
+                    <div class="about-card">
+                        <h4>Opponent Stats</h4>
+                        <p>Say "opponent" before the stat — no jersey number needed.</p>
+                        <div class="about-examples">
+                            <code>"Opponent goal"</code>
+                            <code>"Opponent shot"</code>
+                            <code>"Opponent ground ball"</code>
+                            <code>"Opponent turnover"</code>
+                        </div>
+                    </div>
+                    <div class="about-card">
+                        <h4>Team Stats (no player number needed)</h4>
+                        <div class="about-examples">
+                            <code>"Clear"</code>
+                            <code>"Failed clear"</code>
+                            <code>"Opponent clear"</code>
+                            <code>"Opp failed clear"</code>
+                        </div>
+                    </div>
+                    <div class="about-tip">
+                        <strong>Tip:</strong> An undo button appears for 5 seconds after every voice command in case the app misheard you. Common mishearings like "call" for "goal" or "grown ball" for "ground ball" are automatically corrected.
+                    </div>
+                </div>
+
+                <!-- Stat Definitions -->
+                <div class="about-section">
+                    <div class="about-section-icon">📖</div>
+                    <h3>Stat Definitions</h3>
+
                     <div class="about-card">
                         <h4>Goal (G)</h4>
                         <p>A goal is scored when a shot crosses the goal line completely. Record the <strong>player's number</strong>, the <strong>period</strong>, and the <strong>time remaining</strong>.</p>
                         <div class="about-detail">If a team puts the ball into its own goal, it's credited to the opponent as a "team goal" — not to any individual player.</div>
-                        <div class="about-detail">In Laxtracular, goals automatically add a shot, increment the score, and prompt for an assist.</div>
+                        <div class="about-detail"><strong>How Laxtracular handles it:</strong> Goals automatically add a shot, increment the score, pause the clock (stop time), and prompt for an assist. Voice: <code>"Goal 12"</code> or <code>"Opponent goal"</code></div>
                     </div>
 
                     <div class="about-card">
@@ -395,13 +469,14 @@
                         <p>An assist is awarded when a player makes a <strong>direct pass</strong> to a teammate who <strong>immediately scores</strong> without having to dodge or beat a defender (other than the goalkeeper in the crease).</p>
                         <div class="about-detail"><strong>Only one</strong> assist can be awarded per goal. Many goals in lacrosse are unassisted — don't force an assist if the scorer had to make a move to get the shot off.</div>
                         <div class="about-detail"><strong>Not an assist:</strong> A pass to a player who then dodges a defender, drives to the cage, or makes multiple moves before shooting. The key test: did the passer create an immediate scoring opportunity?</div>
+                        <div class="about-detail"><strong>How Laxtracular handles it:</strong> After every goal, a player picker appears to select the assister or tap "No Assist." The assist gets the same timestamp as the goal.</div>
                     </div>
 
                     <div class="about-card">
                         <h4>Shot (Sh)</h4>
                         <p>Any time a player propels the ball toward the goal <strong>with the intent to score</strong>, it's a shot — whether it goes in, is saved, hits the post, or misses wide.</p>
                         <div class="about-detail">A pass that accidentally goes toward the goal is <strong>not</strong> a shot. Intent matters.</div>
-                        <div class="about-detail">In Laxtracular, goals automatically count as a shot. Record additional shots for misses and saves.</div>
+                        <div class="about-detail"><strong>How Laxtracular handles it:</strong> Goals automatically count as a shot. Record additional shots separately for misses and saves. Voice: <code>"Shot 7"</code></div>
                     </div>
 
                     <div class="about-card">
@@ -409,6 +484,7 @@
                         <p>A save is credited to the goalkeeper when they stop or deflect a shot that <strong>would have entered the goal</strong> if not blocked.</p>
                         <div class="about-detail">The key question: "If the goalie wasn't there, would the ball have gone in?" If yes, it's a save. If the shot was going wide or over the cage anyway, it's just a shot — no save.</div>
                         <div class="about-detail">Saves can be made with the stick or any part of the goalie's body.</div>
+                        <div class="about-detail"><strong>Voice:</strong> <code>"Save 1"</code></div>
                     </div>
 
                     <div class="about-card">
@@ -416,6 +492,7 @@
                         <p>A ground ball is awarded when a player picks up a <strong>loose ball</strong> off the ground and gains possession — meaning they can immediately pass, shoot, or cradle.</p>
                         <div class="about-detail">The ball must be <strong>contested</strong> — if a player scoops an uncontested ball with no opponent nearby, it's generally not a ground ball.</div>
                         <div class="about-detail">After a faceoff, the player who wins possession gets a ground ball (along with the faceoff win).</div>
+                        <div class="about-detail"><strong>Voice:</strong> <code>"Ground ball 22"</code></div>
                     </div>
 
                     <div class="about-card">
@@ -424,6 +501,7 @@
                         <div class="about-detail"><strong>Faceoff Won:</strong> The faceoff player (or their wing) gains first possession. Credit the faceoff specialist, not the wing player who may scoop it up.</div>
                         <div class="about-detail"><strong>Faceoff Lost:</strong> The opponent gains first possession from the faceoff.</div>
                         <div class="about-detail"><strong>FO%</strong> (Faceoff Win %) = Faceoffs Won / Total Faceoffs. This is one of the most important team stats in lacrosse — controlling faceoffs means controlling possession.</div>
+                        <div class="about-detail"><strong>Voice:</strong> <code>"Faceoff win 14"</code> or <code>"Faceoff loss 14"</code></div>
                     </div>
 
                     <div class="about-card">
@@ -431,6 +509,7 @@
                         <p>A turnover occurs when a player or team <strong>in possession loses the ball</strong> to the opponent in a live-ball situation.</p>
                         <div class="about-detail">Common turnovers: bad passes, drops, unforced errors, offensive fouls, failed clears, shot clock violations.</div>
                         <div class="about-detail">A turnover doesn't always mean someone on the other team caused it — sometimes players just make mistakes.</div>
+                        <div class="about-detail"><strong>Voice:</strong> <code>"Turnover 5"</code> or <code>"Opponent turnover"</code></div>
                     </div>
 
                     <div class="about-card">
@@ -438,6 +517,7 @@
                         <p>A caused turnover is credited when a player's <strong>positive, aggressive action</strong> directly causes the opponent to lose possession.</p>
                         <div class="about-detail">Examples: stick checks that dislodge the ball, body positioning that forces a bad pass, interceptions.</div>
                         <div class="about-detail">Not every turnover has a caused turnover — if the ball carrier trips over their own feet, that's a turnover but nobody caused it. Only <strong>one</strong> caused turnover can be awarded per opponent turnover.</div>
+                        <div class="about-detail"><strong>Voice:</strong> <code>"Takeaway 8"</code></div>
                     </div>
 
                     <div class="about-card">
@@ -445,25 +525,56 @@
                         <p>Record the player's number, the violation type, the period, the time, and the penalty duration. There are two categories:</p>
                         <div class="about-detail"><strong>Personal fouls</strong> (slashing, cross-checking, illegal body check, etc.) — 1 to 3 minutes. If a player accumulates <strong>5 total minutes</strong> of personal fouls, they foul out of the game.</div>
                         <div class="about-detail"><strong>Technical fouls</strong> (holding, pushing, offside, etc.) — 30 seconds with possession, or possession change without time if the other team already has the ball. Technical fouls do <strong>not</strong> count toward the 5-minute foul-out.</div>
-                    </div>
-
-                    <div class="about-card about-card-highlight-blue">
-                        <h4>Team Stats</h4>
-                        <p>These stats are tracked at the team level, not per player. Clears can be recorded live with tap or voice; EMO and PK are entered post-game in <strong>Edit Stats</strong>.</p>
-                        <div class="about-detail"><strong>Clears / Failed Clears:</strong> A clear is when the defensive team successfully advances the ball past the midfield restraining line to start an offensive possession. A failed clear means the team lost possession before getting it across — which also counts as a turnover. <strong>Clearing %</strong> = Successful Clears / Total Clear Attempts.</div>
-                        <div class="about-detail"><strong>Man-Up / EMO (Extra Man Offense):</strong> When the opponent has a player in the penalty box, your team is "man-up." An EMO opportunity is each penalty situation; an EMO goal is a goal scored during that advantage. <strong>Man-Up %</strong> = EMO Goals / EMO Opportunities.</div>
-                        <div class="about-detail"><strong>Penalty Kill (Man-Down Defense):</strong> When your team has a player in the box, you're killing a penalty. A successful kill means the opponent <strong>doesn't</strong> score during their man-up. <strong>PK %</strong> = Successful Kills / PK Opportunities.</div>
+                        <div class="about-detail"><strong>How Laxtracular handles it:</strong> Say <code>"Penalty 3"</code> or tap Penalty then select the player. A duration picker appears (30s–3min). The app starts a live countdown on the scoreboard and pauses the clock in stop time mode.</div>
                     </div>
 
                     <div class="about-card">
                         <h4>Penalty Minutes (PIM)</h4>
-                        <p>The total time a player has spent in the penalty box across all penalties. Laxtracular calculates this automatically from penalty durations.</p>
+                        <p>The total time a player has spent in the penalty box across all penalties. Laxtracular calculates this automatically from penalty durations and displays it in game stats and season summary.</p>
                         <div class="about-detail">Under NFHS rules, a player who accumulates <strong>5 minutes of personal fouls</strong> has fouled out of the game. Technical fouls do not count toward this limit.</div>
+                    </div>
+                </div>
+
+                <!-- Team Stats -->
+                <div class="about-section">
+                    <div class="about-section-icon">👥</div>
+                    <h3>Team Stats</h3>
+                    <p class="about-intro">These stats are tracked at the team level, not per player.</p>
+
+                    <div class="about-card about-card-highlight-green">
+                        <h4>Clear (Successful)</h4>
+                        <p>A <strong>successful clear</strong> is when the defensive team gains possession in their own end and successfully advances the ball past the <strong>midfield restraining line</strong> to begin an offensive possession.</p>
+                        <div class="about-detail">The clear is complete the moment a player carrying or receiving the ball crosses midfield with possession, or a pass crosses midfield and is received by a teammate on the offensive side.</div>
+                        <div class="about-detail"><strong>Tap:</strong> "Clear" button | <strong>Voice:</strong> <code>"Clear"</code> or <code>"Opponent clear"</code></div>
+                    </div>
+
+                    <div class="about-card" style="border-left: 4px solid #ef4444;">
+                        <h4>Failed Clear</h4>
+                        <p>A <strong>failed clear</strong> occurs when the defensive team has possession in their own end and <strong>loses the ball before crossing the midfield restraining line</strong>. The opponent regains possession in the offensive zone.</p>
+                        <div class="about-detail">Common causes: turnover during the clear, ball knocked out of bounds and awarded to the other team, 20-second clear violation (NCAA), or intercepted outlet pass.</div>
+                        <div class="about-detail">A failed clear is also counted as a team <strong>turnover</strong>.</div>
+                        <div class="about-detail"><strong>Clearing %</strong> = Successful Clears / (Successful Clears + Failed Clears). A strong clearing team is typically above 80%.</div>
+                        <div class="about-detail"><strong>Tap:</strong> "Failed Clear" button | <strong>Voice:</strong> <code>"Failed clear"</code> or <code>"Opp failed clear"</code></div>
+                    </div>
+
+                    <div class="about-card about-card-highlight-blue">
+                        <h4>Man-Up / EMO (Extra Man Offense)</h4>
+                        <p>When the opponent has a player in the penalty box, your team is "man-up" — you have an extra man on the field. An <strong>EMO opportunity</strong> is each penalty situation; an <strong>EMO goal</strong> is a goal scored during that advantage.</p>
+                        <div class="about-detail"><strong>Man-Up %</strong> = EMO Goals / EMO Opportunities. A good EMO unit converts around 30–40% of opportunities.</div>
+                        <div class="about-detail"><strong>Auto-calculated</strong> — Laxtracular tracks penalty times automatically. Every opponent penalty creates an EMO opportunity, and goals scored during that window are counted as EMO goals. Nothing extra for you to do.</div>
+                    </div>
+
+                    <div class="about-card about-card-highlight-blue">
+                        <h4>Penalty Kill (Man-Down Defense)</h4>
+                        <p>When your team has a player in the box, you're killing a penalty — playing "man-down." A <strong>successful kill</strong> means the opponent <strong>doesn't score</strong> during their man-up advantage.</p>
+                        <div class="about-detail"><strong>PK %</strong> = Successful Kills / PK Opportunities. Strong penalty kill units are above 70%.</div>
+                        <div class="about-detail"><strong>Auto-calculated</strong> — every penalty your team takes creates a PK situation. If the opponent doesn't score during the penalty, it's a successful kill. Laxtracular handles this from the penalty timer — nothing for you to enter.</div>
                     </div>
 
                     <div class="about-tip">
                         <strong>When in doubt:</strong> Ask yourself, "Did this action meaningfully affect possession or scoring?" If yes, record it.
                     </div>
+                </div>
 
                     <div class="about-card" style="background: #f0f4ff; border-left: 4px solid #3b82f6;">
                         <h4>Official Sources</h4>
