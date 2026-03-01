@@ -1331,6 +1331,7 @@ function viewGameStats(gameId) {
                                 timeRemaining: entry.timeRemaining != null ? entry.timeRemaining : 0,
                                 label: `#${player.number} ${player.name}`,
                                 stat: statNames[statKey] || statKey,
+                                statKey: statKey,
                                 isGoal: statKey === 'goal',
                                 isOpponent: false
                             });
@@ -1355,6 +1356,7 @@ function viewGameStats(gameId) {
                             timeRemaining: entry.timeRemaining != null ? entry.timeRemaining : 0,
                             label: oppName,
                             stat: statNames[statKey] || statKey,
+                            statKey: statKey,
                             isGoal: statKey === 'goal',
                             isOpponent: true
                         });
@@ -1373,6 +1375,28 @@ function viewGameStats(gameId) {
 
         const periodLabel = game.format === 'quarters' ? 'Q' : 'H';
 
+        // === SCORING SUMMARY (goals + assists only) ===
+        const scoringEvents = gameLogEvents.filter(e => e.statKey === 'goal' || e.statKey === 'assist');
+        if (scoringEvents.length > 0) {
+            statsHtml += '<h4 style="margin-top: 1.5rem; color: #1e293b;">Scoring Summary</h4>';
+            statsHtml += '<div style="border: 1px solid #e2e8f0; border-radius: 8px; margin-top: 0.5rem; overflow: hidden;">';
+            statsHtml += '<table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+
+            scoringEvents.forEach((evt, i) => {
+                const bg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
+                const goalStyle = evt.isGoal ? 'font-weight: 700; color: #16a34a;' : 'color: #64748b; font-style: italic;';
+                const oppStyle = evt.isOpponent ? 'color: #dc2626;' : '';
+                statsHtml += `<tr style="background: ${bg}; border-bottom: 1px solid #f1f5f9;">`;
+                statsHtml += `<td style="padding: 0.4rem 0.75rem; white-space: nowrap; color: #64748b; font-family: monospace;">${periodLabel}${evt.period} ${evt.time}</td>`;
+                statsHtml += `<td style="padding: 0.4rem 0.75rem; ${oppStyle}">${evt.label}</td>`;
+                statsHtml += `<td style="padding: 0.4rem 0.75rem; ${goalStyle}">${evt.stat}</td>`;
+                statsHtml += '</tr>';
+            });
+
+            statsHtml += '</table></div>';
+        }
+
+        // === FULL GAME LOG ===
         statsHtml += '<h4 style="margin-top: 1.5rem; color: #1e293b;">Game Log</h4>';
         statsHtml += '<div style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; margin-top: 0.5rem;">';
         statsHtml += '<table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
