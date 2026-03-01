@@ -179,6 +179,7 @@ function showScreen(screenId) {
         screen.classList.remove('active');
     });
     document.getElementById(screenId).classList.add('active');
+    window.scrollTo(0, 0);
 
     // Refresh data when showing certain screens
     if (screenId === 'roster-screen') loadRoster();
