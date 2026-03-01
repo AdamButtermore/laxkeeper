@@ -116,6 +116,7 @@ var LaxSync = (function () {
                 });
 
                 localStorage.setItem(USER_TEAMS_KEY, JSON.stringify(merged));
+                console.log('[LaxSync] Synced teams from cloud:', merged.length, 'teams');
 
                 // If no active team but we have teams, set the first one
                 if (!getActiveTeam() && merged.length > 0) {
@@ -125,13 +126,25 @@ var LaxSync = (function () {
                     } else {
                         localStorage.setItem(ACTIVE_TEAM_KEY, merged[0].code);
                     }
-                }
 
-                loadTeamUI();
-                updateActiveTeamDisplay();
+                    // Re-activate sync now that we have a team
+                    var code = getActiveTeam();
+                    if (code) {
+                        switchToTeamPath(code);
+                        hydrateFromFirestore().then(function () {
+                            setupRealtimeListeners();
+                            console.log('[LaxSync] Activated sync for team:', code);
+                        });
+                    }
+                }
             }
+
+            // Always update UI
+            loadTeamUI();
+            updateActiveTeamDisplay();
         }).catch(function (err) {
             console.error('[LaxSync] Failed to sync teams from Firestore:', err);
+            loadTeamUI();
         });
     }
 
