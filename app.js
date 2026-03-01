@@ -265,6 +265,7 @@ function scheduleGame() {
     const gameTime = document.getElementById('game-time').value;
     const location = document.getElementById('game-location').value.trim();
     const format = document.querySelector('input[name="game-format"]:checked').value;
+    const clockType = document.querySelector('input[name="clock-type"]:checked').value;
     const periodDuration = parseInt(document.getElementById('period-duration').value);
 
     if (!opponent || !gameDate) {
@@ -282,6 +283,7 @@ function scheduleGame() {
         datetime,
         location,
         format,
+        clockType,
         periodDuration,
         status: 'scheduled',
         createdAt: new Date().toISOString()
@@ -326,7 +328,7 @@ function loadScheduledGames() {
                 <h4>vs ${game.opponent}</h4>
                 <p>📅 ${date.toLocaleDateString()} at ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                 ${game.location ? `<p>📍 ${game.location}</p>` : ''}
-                <p>⏱️ ${game.format === 'quarters' ? '4 Quarters' : '2 Halves'} × ${game.periodDuration} min</p>
+                <p>⏱️ ${game.format === 'quarters' ? '4 Quarters' : '2 Halves'} × ${game.periodDuration} min${game.clockType === 'running' ? ' (running)' : ' (stop)'}</p>
             </div>
         `;
     }).join('');
@@ -353,7 +355,7 @@ function loadGamesList() {
                 <h4>vs ${game.opponent}</h4>
                 <p>📅 ${date.toLocaleDateString()} at ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                 ${game.location ? `<p>📍 ${game.location}</p>` : ''}
-                <p>⏱️ ${game.format === 'quarters' ? '4 Quarters' : '2 Halves'} × ${game.periodDuration} min</p>
+                <p>⏱️ ${game.format === 'quarters' ? '4 Quarters' : '2 Halves'} × ${game.periodDuration} min${game.clockType === 'running' ? ' (running)' : ' (stop)'}</p>
             </div>
         `;
     }).join('');
@@ -698,6 +700,12 @@ function selectPlayerForStat(playerId) {
             currentGame.periodScores.home[currentGame.currentPeriod - 1]++;
         }
         document.getElementById('home-score').textContent = currentGame.homeScore;
+
+        // Stop time: pause clock on goal
+        if (currentGame.clockType === 'stop' && currentGame.clockRunning) {
+            pauseClock();
+        }
+
         saveCurrentGame();
 
         // Show feedback
@@ -710,8 +718,8 @@ function selectPlayerForStat(playerId) {
             btn.style.background = originalBg;
             btn.style.color = '';
 
-            // Prompt for assist
-            promptForAssist(playerId);
+            // Prompt for assist (pass goal timestamp so assist gets same time)
+            promptForAssist(playerId, ts);
         }, 500);
         return;
     }
@@ -767,6 +775,11 @@ function recordOpponentStat() {
             }
             document.getElementById('home-score').textContent = currentGame.homeScore;
         }
+
+        // Stop time: pause clock on goal
+        if (currentGame.clockType === 'stop' && currentGame.clockRunning) {
+            pauseClock();
+        }
     }
 
     saveCurrentGame();
@@ -784,7 +797,7 @@ function recordOpponentStat() {
     }, 500);
 }
 
-function promptForAssist(goalScorerId) {
+function promptForAssist(goalScorerId, goalTimestamp) {
     const roster = getRoster();
 
     // Clear stat selection UI
@@ -818,7 +831,7 @@ function promptForAssist(goalScorerId) {
             <div class="player-btn-name">${player.name.split(' ')[0]}</div>
         `;
         btn.onclick = () => {
-            const assistTs = recordStatTimestamp();
+            const assistTs = goalTimestamp || recordStatTimestamp();
             if (Array.isArray(currentGame.stats[player.id]['assist'])) {
                 currentGame.stats[player.id]['assist'].push(assistTs);
             } else {
@@ -2145,11 +2158,12 @@ function executeVoiceCommand(parsed) {
             showVoiceFeedback('Recorded!', result.description);
             pushUndo(result.undoActions, result.description);
 
-            // Prompt for assist after goal (delayed)
+            // Prompt for assist after goal (delayed, pass goal timestamp)
             if (parsed.stat === 'goal') {
+                const goalTs = result.timestamp;
                 voiceAssistTimeout = setTimeout(() => {
                     hideVoiceFeedback();
-                    promptForAssist(player.id);
+                    promptForAssist(player.id, goalTs);
                 }, 800);
             } else {
                 setTimeout(hideVoiceFeedback, 1500);
@@ -2216,12 +2230,17 @@ function recordVoicePlayerStat(playerId, statType) {
             document.getElementById('away-score').textContent = currentGame.awayScore;
             undoActions.push({ type: 'score', team: 'away', delta: -1 });
         }
+
+        // Stop time: pause clock on goal
+        if (currentGame.clockType === 'stop' && currentGame.clockRunning) {
+            pauseClock();
+        }
     }
 
     saveCurrentGame();
 
     const description = `${statNames[statType] || statType} #${player.number}`;
-    return { undoActions, description };
+    return { undoActions, description, timestamp: ts };
 }
 
 function recordVoiceOpponentStat(statType) {
@@ -2271,6 +2290,11 @@ function recordVoiceOpponentStat(statType) {
             }
             document.getElementById('home-score').textContent = currentGame.homeScore;
             undoActions.push({ type: 'score', team: 'home', delta: -1 });
+        }
+
+        // Stop time: pause clock on goal
+        if (currentGame.clockType === 'stop' && currentGame.clockRunning) {
+            pauseClock();
         }
     }
 
