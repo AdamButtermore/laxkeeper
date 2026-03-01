@@ -547,6 +547,7 @@ function adjustScore(team, amount) {
 
 // ===== GAME CLOCK =====
 function toggleClock() {
+    currentGame.clockPausedForGoal = false;
     if (currentGame.clockRunning) {
         pauseClock();
     } else {
@@ -554,7 +555,16 @@ function toggleClock() {
     }
 }
 
+// Auto-resume clock if it was paused for a goal (stop time)
+function resumeClockIfGoalPaused() {
+    if (currentGame && currentGame.clockPausedForGoal && !currentGame.clockRunning) {
+        currentGame.clockPausedForGoal = false;
+        startClock();
+    }
+}
+
 function startClock() {
+    currentGame.clockPausedForGoal = false;
     currentGame.clockRunning = true;
     document.getElementById('clock-btn-text').textContent = 'Pause';
     document.getElementById('left-clock-btn-text').textContent = 'PAUSE';
@@ -574,6 +584,7 @@ function startClock() {
 
 function pauseClock() {
     currentGame.clockRunning = false;
+    // Don't clear clockPausedForGoal here — it's set right after this call
     document.getElementById('clock-btn-text').textContent = 'Start';
     document.getElementById('left-clock-btn-text').textContent = 'START';
 
@@ -667,6 +678,7 @@ function clearStatSelection() {
 
 function selectPlayerForStat(playerId) {
     if (!selectedStat) return;
+    resumeClockIfGoalPaused();
 
     const roster = getRoster();
     const player = roster.find(p => p.id === playerId);
@@ -704,6 +716,7 @@ function selectPlayerForStat(playerId) {
         // Stop time: pause clock on goal
         if (currentGame.clockType === 'stop' && currentGame.clockRunning) {
             pauseClock();
+            currentGame.clockPausedForGoal = true;
         }
 
         saveCurrentGame();
@@ -743,6 +756,7 @@ function selectPlayerForStat(playerId) {
 
 function recordOpponentStat() {
     if (!selectedStat) return;
+    resumeClockIfGoalPaused();
 
     // Record stat for opponent team
     const ts = recordStatTimestamp();
@@ -779,6 +793,7 @@ function recordOpponentStat() {
         // Stop time: pause clock on goal
         if (currentGame.clockType === 'stop' && currentGame.clockRunning) {
             pauseClock();
+            currentGame.clockPausedForGoal = true;
         }
     }
 
@@ -1781,6 +1796,7 @@ function showPenaltyTimeSelector(playerId) {
 }
 
 function addPenalty(playerId, playerName, playerNumber, duration) {
+    resumeClockIfGoalPaused();
     // Record penalty stat
     const penTs = recordStatTimestamp();
     if (Array.isArray(currentGame.stats[playerId]['penalty'])) {
@@ -2179,6 +2195,7 @@ function executeVoiceCommand(parsed) {
 // ===== VOICE STAT RECORDING (decoupled from tap DOM events) =====
 function recordVoicePlayerStat(playerId, statType) {
     if (!currentGame || !currentGame.stats[playerId]) return null;
+    resumeClockIfGoalPaused();
 
     const roster = getRoster();
     const player = roster.find(p => p.id === playerId);
@@ -2234,6 +2251,7 @@ function recordVoicePlayerStat(playerId, statType) {
         // Stop time: pause clock on goal
         if (currentGame.clockType === 'stop' && currentGame.clockRunning) {
             pauseClock();
+            currentGame.clockPausedForGoal = true;
         }
     }
 
@@ -2245,6 +2263,7 @@ function recordVoicePlayerStat(playerId, statType) {
 
 function recordVoiceOpponentStat(statType) {
     if (!currentGame) return null;
+    resumeClockIfGoalPaused();
 
     const statNames = {
         'faceoff-won': 'Faceoff Won', 'faceoff-lost': 'Faceoff Lost',
@@ -2295,6 +2314,7 @@ function recordVoiceOpponentStat(statType) {
         // Stop time: pause clock on goal
         if (currentGame.clockType === 'stop' && currentGame.clockRunning) {
             pauseClock();
+            currentGame.clockPausedForGoal = true;
         }
     }
 
