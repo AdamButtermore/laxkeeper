@@ -96,8 +96,9 @@ var LaxSync = (function () {
     }
 
     // ---- Sync teams list from Firestore user doc ----
-    function syncTeamsFromFirestore(user) {
+    function syncTeamsFromFirestore(user, retryCount) {
         if (!user) return;
+        retryCount = retryCount || 0;
         var userRef = firebase.firestore().collection('users').doc(user.uid);
         userRef.get().then(function (doc) {
             if (doc.exists && doc.data().teams && doc.data().teams.length > 0) {
@@ -143,8 +144,15 @@ var LaxSync = (function () {
             loadTeamUI();
             updateActiveTeamDisplay();
         }).catch(function (err) {
-            console.error('[LaxSync] Failed to sync teams from Firestore:', err);
-            loadTeamUI();
+            if (retryCount < 3) {
+                console.log('[LaxSync] Team sync retry', retryCount + 1, 'in 1s (auth token may not be ready)');
+                setTimeout(function () {
+                    syncTeamsFromFirestore(user, retryCount + 1);
+                }, 1000);
+            } else {
+                console.error('[LaxSync] Failed to sync teams from Firestore:', err);
+                loadTeamUI();
+            }
         });
     }
 
