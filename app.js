@@ -1025,7 +1025,7 @@ function viewGameStats(gameId) {
     if (!game) return;
 
     const roster = getRoster();
-    let statsHtml = '<div style="padding: 1rem; background: white; border-radius: 8px; max-width: 900px; margin: auto; color: #1e293b;">';
+    let statsHtml = '<div style="padding: 1.5rem; background: white; border-radius: 8px; max-width: 1200px; width: 95%; margin: auto; color: #1e293b;">';
     statsHtml += `<h3 style="color: #1e293b;">vs ${game.opponent}</h3>`;
     statsHtml += `<p style="font-size: 1.5rem; font-weight: bold; margin: 1rem 0;">Score: ${game.homeScore} - ${game.awayScore}</p>`;
 
@@ -1041,7 +1041,7 @@ function viewGameStats(gameId) {
             <table style="width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.85rem;">
                 <thead>
                     <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
-                        <th style="padding: 0.5rem; text-align: left; font-weight: 700;">Player</th>
+                        <th style="padding: 0.5rem; text-align: left; font-weight: 700; position: sticky; left: 0; background: #f1f5f9; z-index: 1; white-space: nowrap;">Player</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Goals</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Assists</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Points</th>
@@ -1073,7 +1073,7 @@ function viewGameStats(gameId) {
         hasStats = true;
         statsHtml += `
             <tr style="border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 0.5rem; font-weight: 600;">#${player.number} ${player.name}</td>
+                <td style="padding: 0.5rem; font-weight: 600; position: sticky; left: 0; background: white; z-index: 1; white-space: nowrap;">#${player.number} ${player.name}</td>
                 <td style="padding: 0.5rem; text-align: center;">${goals}</td>
                 <td style="padding: 0.5rem; text-align: center;">${assists}</td>
                 <td style="padding: 0.5rem; text-align: center; font-weight: 600;">${points}</td>
