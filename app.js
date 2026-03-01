@@ -897,6 +897,7 @@ function loadGameHistory() {
                     ${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                 </p>
                 <button class="btn-secondary" onclick="viewGameStats('${game.id}')">View Stats</button>
+                <button class="btn-secondary" onclick="editGameStats('${game.id}')" style="margin-top: 0.5rem;">Edit Stats</button>
                 <button class="btn-danger" onclick="deleteGame('${game.id}')" style="margin-top: 0.5rem;">Delete Game</button>
             </div>
         `;
@@ -917,6 +918,105 @@ function deleteGame(gameId) {
     const updated = games.filter(g => g.id !== gameId);
     saveGames(updated);
     loadGameHistory();
+}
+
+function editGameStats(gameId) {
+    const games = getGames();
+    const game = games.find(g => g.id === gameId);
+    if (!game) return;
+
+    const roster = getRoster();
+    const statKeys = ['goal', 'assist', 'shot', 'ground-ball', 'faceoff-won', 'faceoff-lost', 'turnover', 'caused-turnover', 'save', 'penalty'];
+    const statLabels = ['G', 'A', 'Sh', 'GB', 'FOW', 'FOL', 'TO', 'TA', 'Sv', 'Pen'];
+
+    let html = '<div style="padding: 1rem; background: white; border-radius: 8px; max-width: 900px; margin: auto; color: #1e293b;">';
+    html += `<h3 style="color: #1e293b;">Edit Stats: vs ${game.opponent}</h3>`;
+
+    // Editable score
+    html += '<div style="display: flex; gap: 1rem; align-items: center; margin: 1rem 0;">';
+    html += '<label style="font-weight: 700;">Home:</label>';
+    html += `<input type="number" id="edit-home-score" value="${game.homeScore}" min="0" style="width: 60px; padding: 0.5rem; font-size: 1.2rem; font-weight: 700; text-align: center; border: 2px solid #cbd5e1; border-radius: 8px;">`;
+    html += '<label style="font-weight: 700;">Away:</label>';
+    html += `<input type="number" id="edit-away-score" value="${game.awayScore}" min="0" style="width: 60px; padding: 0.5rem; font-size: 1.2rem; font-weight: 700; text-align: center; border: 2px solid #cbd5e1; border-radius: 8px;">`;
+    html += '</div>';
+
+    // Editable stats table
+    html += '<div style="overflow-x: auto;">';
+    html += '<table style="width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.85rem;">';
+    html += '<thead><tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">';
+    html += '<th style="padding: 0.5rem; text-align: left; font-weight: 700;">Player</th>';
+    statLabels.forEach(label => {
+        html += `<th style="padding: 0.5rem; text-align: center; font-weight: 700;">${label}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    roster.forEach(player => {
+        const stats = game.stats[player.id];
+        if (!stats) return;
+
+        html += `<tr style="border-bottom: 1px solid #e2e8f0;">`;
+        html += `<td style="padding: 0.5rem; font-weight: 600; white-space: nowrap;">#${player.number} ${player.name}</td>`;
+        statKeys.forEach(key => {
+            const val = stats[key] || 0;
+            html += `<td style="padding: 0.25rem; text-align: center;">`;
+            html += `<input type="number" data-player="${player.id}" data-stat="${key}" value="${val}" min="0" `;
+            html += `style="width: 44px; padding: 0.3rem; text-align: center; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem;">`;
+            html += `</td>`;
+        });
+        html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    html += '</div>';
+
+    // Create overlay
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    container.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 1000; overflow-y: auto; padding: 2rem 1rem;';
+
+    // Save button
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Save Changes';
+    saveBtn.className = 'btn-primary';
+    saveBtn.style.marginTop = '1rem';
+    saveBtn.onclick = () => {
+        // Read score
+        game.homeScore = parseInt(document.getElementById('edit-home-score').value) || 0;
+        game.awayScore = parseInt(document.getElementById('edit-away-score').value) || 0;
+
+        // Read all stat inputs
+        container.querySelectorAll('input[data-player]').forEach(input => {
+            const playerId = input.dataset.player;
+            const statKey = input.dataset.stat;
+            const val = parseInt(input.value) || 0;
+            if (game.stats[playerId]) {
+                game.stats[playerId][statKey] = val;
+            }
+        });
+
+        // Save
+        const allGames = getGames();
+        const idx = allGames.findIndex(g => g.id === gameId);
+        if (idx !== -1) {
+            allGames[idx] = game;
+            saveGames(allGames);
+        }
+
+        container.remove();
+        loadGameHistory();
+        alert('Stats updated!');
+    };
+    container.firstChild.appendChild(saveBtn);
+
+    // Cancel button
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.className = 'btn-secondary';
+    cancelBtn.style.marginTop = '0.5rem';
+    cancelBtn.onclick = () => container.remove();
+    container.firstChild.appendChild(cancelBtn);
+
+    document.body.appendChild(container);
 }
 
 function viewGameStats(gameId) {
