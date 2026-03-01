@@ -18,6 +18,12 @@
     --border-color: #404040;
     --shadow: 0 4px 12px rgba(0, 0, 0, 0.8);
     --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.9);
+    --stat-flash: #10b981;
+    --color-win: #10b981;
+    --color-loss: #ef4444;
+    --color-tie: #94a3b8;
+    --color-opponent: #dc2626;
+    --color-green-text: #16a34a;
 }
 
 body {
@@ -702,6 +708,284 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     font-size: 1.5rem;
     font-weight: bold;
     margin: 0.5rem 0;
+}
+
+/* ===== OVERLAY SYSTEM ===== */
+
+@keyframes overlayFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes overlaySlideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 1000;
+    overflow-y: auto;
+    padding: 1rem;
+    animation: overlayFadeIn 0.2s ease-out;
+}
+
+.overlay--centered {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.overlay--z1100 {
+    z-index: 1100;
+}
+
+.overlay-content {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid var(--primary-color);
+    color: var(--text-primary);
+    margin: 0 auto;
+    animation: overlaySlideUp 0.25s ease-out;
+}
+
+.overlay-content--wide {
+    max-width: 1200px;
+    width: 95%;
+}
+
+.overlay-content--medium {
+    max-width: 900px;
+}
+
+.overlay-content--narrow {
+    max-width: 400px;
+}
+
+/* ===== DARK STAT TABLES ===== */
+
+.stat-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.stat-table th {
+    background: var(--primary-color);
+    color: white;
+    padding: 0.5rem;
+    text-align: center;
+    font-weight: 700;
+}
+
+.stat-table th:first-child {
+    text-align: left;
+}
+
+.stat-table td {
+    padding: 0.5rem;
+    text-align: center;
+    color: var(--text-primary);
+}
+
+.stat-table td:first-child {
+    text-align: left;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.stat-table tbody tr {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.stat-table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.stat-table tbody tr:hover {
+    background: rgba(0, 102, 255, 0.08);
+}
+
+.stat-table-sticky td:first-child,
+.stat-table-sticky th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+}
+
+.stat-table-sticky th:first-child {
+    background: var(--primary-color);
+}
+
+.stat-table-sticky td:first-child {
+    background: var(--card-bg);
+}
+
+.stat-table-sticky tbody tr:nth-child(even) td:first-child {
+    background: #1c1c1c;
+}
+
+/* Lighter-weight table for game log / scoring summary */
+.stat-log-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.stat-log-table td {
+    padding: 0.4rem 0.75rem;
+    color: var(--text-primary);
+}
+
+.stat-log-table tr {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.stat-log-table tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Team stats sub-card */
+.team-stats-card {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+/* ===== EDIT LOG (dark-themed) ===== */
+
+.edit-log-container {
+    background: var(--card-bg);
+    border-radius: 8px;
+    padding: 1rem;
+    max-width: 600px;
+    margin: 0 auto;
+    color: var(--text-primary);
+    animation: overlaySlideUp 0.25s ease-out;
+}
+
+.edit-log-header {
+    background: var(--primary-dark);
+    padding: 0.4rem 0.75rem;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 0.75rem;
+    border-radius: 4px;
+}
+
+.edit-log-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.9rem;
+}
+
+.edit-log-time {
+    min-width: 40px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.edit-log-desc {
+    flex: 1;
+}
+
+.btn-action-sm {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.8rem;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-action-sm--edit {
+    background: var(--primary-color);
+}
+
+.btn-action-sm--delete {
+    background: var(--danger-color);
+}
+
+/* Reassign stat picker grid */
+.picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.5rem;
+}
+
+.picker-btn {
+    padding: 0.6rem 0.5rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    text-align: center;
+    color: var(--text-primary);
+}
+
+.picker-btn:active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+}
+
+/* ===== DARK FORM INPUTS ===== */
+
+.dark-input {
+    background: var(--bg-color);
+    color: var(--text-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.5rem;
+    font-size: 1rem;
+}
+
+.dark-input:focus {
+    border-color: var(--primary-color);
+    outline: none;
+}
+
+.dark-input--score {
+    width: 60px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.dark-input--stat {
+    width: 44px;
+    padding: 0.3rem;
+    text-align: center;
+    border-width: 1px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+/* ===== STAT FLASH ANIMATION ===== */
+
+.player-btn {
+    transition: all 0.15s, background 0.2s;
+}
+
+.player-btn.stat-flash {
+    background: var(--stat-flash) !important;
+    color: white !important;
+    border-color: var(--stat-flash) !important;
+}
+
+.player-btn.stat-flash .player-btn-number,
+.player-btn.stat-flash .player-btn-name {
+    color: white !important;
 }
 
 /* Responsive adjustments */

@@ -835,16 +835,15 @@ function selectPlayerForStat(playerId) {
 
         // Show feedback
         const btn = event.target.closest('.player-btn');
-        const originalBg = btn.style.background;
-        btn.style.background = '#10b981';
-        btn.style.color = 'white';
+        btn.classList.add('stat-flash');
 
         setTimeout(() => {
-            btn.style.background = originalBg;
-            btn.style.color = '';
+            btn.classList.remove('stat-flash');
 
-            // Prompt for assist (pass goal timestamp so assist gets same time)
-            promptForAssist(playerId, ts);
+            // Prompt for shot location, then assist
+            promptShotLocation(ts, () => {
+                promptForAssist(playerId, ts);
+            });
         }, 500);
         return;
     }
@@ -853,16 +852,18 @@ function selectPlayerForStat(playerId) {
 
     // Show feedback
     const btn = event.target.closest('.player-btn');
-    const originalBg = btn.style.background;
-    btn.style.background = '#10b981';
-    btn.style.color = 'white';
+    btn.classList.add('stat-flash');
 
     setTimeout(() => {
-        btn.style.background = originalBg;
-        btn.style.color = '';
+        btn.classList.remove('stat-flash');
 
-        // Return to stat selection
-        clearStatSelection();
+        if (selectedStat === 'shot') {
+            promptShotLocation(ts, () => {
+                clearStatSelection();
+            });
+        } else {
+            clearStatSelection();
+        }
     }, 500);
 }
 
@@ -913,11 +914,10 @@ function recordOpponentStat() {
 
     // Show feedback
     const btn = event.target;
-    const originalBg = btn.style.background;
-    btn.style.background = '#10b981';
+    btn.classList.add('stat-flash');
 
     setTimeout(() => {
-        btn.style.background = originalBg;
+        btn.classList.remove('stat-flash');
 
         // Return to stat selection
         clearStatSelection();
@@ -967,8 +967,7 @@ function promptForAssist(goalScorerId, goalTimestamp) {
             saveCurrentGame();
 
             // Show confirmation
-            btn.style.background = '#10b981';
-            btn.style.color = 'white';
+            btn.classList.add('stat-flash');
 
             setTimeout(() => {
                 overlay.remove();
@@ -1036,29 +1035,29 @@ function toggleStatsView() {
     const teamName = localStorage.getItem(STORAGE_KEYS.TEAM_NAME) || 'Home';
     const opponentName = currentGame.trackingTeam === 'home' ? currentGame.opponent : teamName;
 
-    let statsHtml = '<div style="padding: 1rem; background: white; border-radius: 8px; color: #1e293b;">';
-    statsHtml += '<h3 style="margin-bottom: 1rem; color: #1e293b;">Game Statistics</h3>';
+    let statsHtml = '<div class="overlay-content">';
+    statsHtml += '<h3 style="margin-bottom: 1rem;">Game Statistics</h3>';
 
     // Your team stats table
-    statsHtml += `<h4 style="margin-top: 1rem; color: #2563eb;">${currentGame.trackingTeamName}</h4>`;
+    statsHtml += `<h4 style="margin-top: 1rem; color: var(--primary-color);">${currentGame.trackingTeamName}</h4>`;
 
     statsHtml += `
         <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.85rem;">
+            <table class="stat-table" style="margin-top: 0.5rem;">
                 <thead>
-                    <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
-                        <th style="padding: 0.5rem; text-align: left; font-weight: 700;">Player</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">G</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">A</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Pts</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Sh</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">GB</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">FOW</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">FOL</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">TO</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">TA</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Sv</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Pen</th>
+                    <tr>
+                        <th>Player</th>
+                        <th>G</th>
+                        <th>A</th>
+                        <th>Pts</th>
+                        <th>Sh</th>
+                        <th>GB</th>
+                        <th>FOW</th>
+                        <th>FOL</th>
+                        <th>TO</th>
+                        <th>TA</th>
+                        <th>Sv</th>
+                        <th>Pen</th>
                     </tr>
                 </thead>
                 <tbody>`;
@@ -1077,24 +1076,24 @@ function toggleStatsView() {
 
         hasPlayerStats = true;
         statsHtml += `
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 0.5rem; font-weight: 600;">#${player.number} ${player.name}</td>
-                <td style="padding: 0.5rem; text-align: center;">${goals}</td>
-                <td style="padding: 0.5rem; text-align: center;">${assists}</td>
-                <td style="padding: 0.5rem; text-align: center; font-weight: 600;">${points}</td>
-                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats.shot)}</td>
-                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats['ground-ball'])}</td>
-                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats['faceoff-won'])}</td>
-                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats['faceoff-lost'])}</td>
-                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats.turnover)}</td>
-                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats['caused-turnover'])}</td>
-                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats.save)}</td>
-                <td style="padding: 0.5rem; text-align: center;">${getStatCount(stats.penalty)}</td>
+            <tr>
+                <td>#${player.number} ${player.name}</td>
+                <td>${goals}</td>
+                <td>${assists}</td>
+                <td style="font-weight: 600;">${points}</td>
+                <td>${getStatCount(stats.shot)}</td>
+                <td>${getStatCount(stats['ground-ball'])}</td>
+                <td>${getStatCount(stats['faceoff-won'])}</td>
+                <td>${getStatCount(stats['faceoff-lost'])}</td>
+                <td>${getStatCount(stats.turnover)}</td>
+                <td>${getStatCount(stats['caused-turnover'])}</td>
+                <td>${getStatCount(stats.save)}</td>
+                <td>${getStatCount(stats.penalty)}</td>
             </tr>`;
     });
 
     if (!hasPlayerStats) {
-        statsHtml += `<tr><td colspan="12" style="padding: 1rem; text-align: center; color: #64748b; font-style: italic;">No stats recorded yet</td></tr>`;
+        statsHtml += `<tr><td colspan="12" style="padding: 1rem; text-align: center; color: var(--text-secondary); font-style: italic;">No stats recorded yet</td></tr>`;
     }
 
     statsHtml += `</tbody></table></div>`;
@@ -1104,12 +1103,12 @@ function toggleStatsView() {
         const oppStats = currentGame.opponentStats;
         const totalOppStats = Object.values(oppStats).reduce((a, b) => a + getStatCount(b), 0);
 
-        statsHtml += `<h4 style="margin-top: 1.5rem; color: #f59e0b;">${opponentName}</h4>`;
+        statsHtml += `<h4 style="margin-top: 1.5rem; color: var(--warning-color);">${opponentName}</h4>`;
 
         if (totalOppStats > 0) {
             const goals = getStatCount(oppStats.goal);
             const assists = getStatCount(oppStats.assist);
-            statsHtml += `<div style="padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 4px; background: #fef3c7;">`;
+            statsHtml += `<div style="padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 4px; background: rgba(255,109,0,0.08);">`;
             statsHtml += `<strong>Team Stats:</strong><br>`;
             statsHtml += `<div style="margin-top: 0.5rem; font-size: 0.9rem;">`;
             statsHtml += `Goals: ${goals} | Assists: ${assists} | Points: ${goals + assists} | `;
@@ -1119,7 +1118,7 @@ function toggleStatsView() {
             statsHtml += `Saves: ${getStatCount(oppStats.save)} | Penalties: ${getStatCount(oppStats.penalty)}`;
             statsHtml += `</div></div>`;
         } else {
-            statsHtml += `<p style="color: #64748b; font-style: italic;">No stats recorded yet</p>`;
+            statsHtml += `<p style="color: var(--text-secondary); font-style: italic;">No stats recorded yet</p>`;
         }
     }
 
@@ -1127,7 +1126,7 @@ function toggleStatsView() {
 
     const container = document.createElement('div');
     container.innerHTML = statsHtml;
-    container.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; overflow-y: auto; padding: 1rem;';
+    container.className = 'overlay';
     container.onclick = (e) => {
         if (e.target === container) container.remove();
     };
@@ -1152,6 +1151,127 @@ function toggleStatsView() {
     container.firstChild.appendChild(btnRow);
 
     document.body.appendChild(container);
+}
+
+// ===== SHOT LOCATION CAPTURE =====
+function createFieldSVG(darkMode) {
+    const bg = darkMode ? '#1a3a1a' : '#2d5a27';
+    const line = darkMode ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.85)';
+    const faint = darkMode ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.35)';
+    return `<svg viewBox="0 0 300 250" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:400px;display:block;margin:0 auto;border-radius:8px;">
+        <rect width="300" height="250" fill="${bg}" rx="8"/>
+        <!-- Endline -->
+        <line x1="20" y1="30" x2="280" y2="30" stroke="${line}" stroke-width="2"/>
+        <!-- Sidelines -->
+        <line x1="20" y1="30" x2="20" y2="250" stroke="${line}" stroke-width="2"/>
+        <line x1="280" y1="30" x2="280" y2="250" stroke="${line}" stroke-width="2"/>
+        <!-- Restraining line -->
+        <line x1="20" y1="220" x2="280" y2="220" stroke="${faint}" stroke-width="1.5" stroke-dasharray="6,4"/>
+        <!-- Goal (rectangle behind crease) -->
+        <rect x="138" y="18" width="24" height="12" fill="none" stroke="${line}" stroke-width="2" rx="2"/>
+        <!-- Crease circle (9ft radius ~ 27px at this scale) -->
+        <circle cx="150" cy="30" r="27" fill="none" stroke="${line}" stroke-width="2"/>
+        <!-- Goal line extension -->
+        <line x1="100" y1="30" x2="200" y2="30" stroke="${line}" stroke-width="2.5"/>
+        <!-- Center hash marks -->
+        <line x1="148" y1="120" x2="152" y2="120" stroke="${faint}" stroke-width="1.5"/>
+        <line x1="148" y1="170" x2="152" y2="170" stroke="${faint}" stroke-width="1.5"/>
+        <!-- Wing area markers -->
+        <line x1="60" y1="100" x2="66" y2="100" stroke="${faint}" stroke-width="1.5"/>
+        <line x1="234" y1="100" x2="240" y2="100" stroke="${faint}" stroke-width="1.5"/>
+    </svg>`;
+}
+
+function promptShotLocation(ts, onDone) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.92);z-index:2000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1rem;';
+
+    const title = document.createElement('div');
+    title.textContent = 'Tap where the shot came from';
+    title.style.cssText = 'color:white;font-size:1.1rem;font-weight:600;margin-bottom:1rem;text-align:center;';
+    overlay.appendChild(title);
+
+    const fieldContainer = document.createElement('div');
+    fieldContainer.innerHTML = createFieldSVG(true);
+    fieldContainer.style.cssText = 'width:100%;max-width:400px;cursor:crosshair;';
+    overlay.appendChild(fieldContainer);
+
+    const svg = fieldContainer.querySelector('svg');
+    svg.addEventListener('click', function(e) {
+        const rect = svg.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width;
+        const y = (e.clientY - rect.top) / rect.height;
+        ts.x = Math.round(x * 1000) / 1000;
+        ts.y = Math.round(y * 1000) / 1000;
+        saveCurrentGame();
+
+        // Show brief confirmation dot
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('cx', x * 300);
+        dot.setAttribute('cy', y * 250);
+        dot.setAttribute('r', '8');
+        dot.setAttribute('fill', '#10b981');
+        dot.setAttribute('stroke', 'white');
+        dot.setAttribute('stroke-width', '2');
+        svg.appendChild(dot);
+
+        setTimeout(() => {
+            overlay.remove();
+            onDone();
+        }, 300);
+    });
+
+    const skipBtn = document.createElement('button');
+    skipBtn.textContent = 'Skip';
+    skipBtn.style.cssText = 'margin-top:1.5rem;padding:0.75rem 2rem;font-size:1rem;border-radius:8px;border:2px solid rgba(255,255,255,0.3);background:transparent;color:rgba(255,255,255,0.7);cursor:pointer;';
+    skipBtn.onclick = () => {
+        overlay.remove();
+        onDone();
+    };
+    overlay.appendChild(skipBtn);
+
+    document.body.appendChild(overlay);
+}
+
+function buildShotChartSVG(shots, options) {
+    options = options || {};
+    const filterId = options.highlightPlayerId || null;
+    const filtered = filterId ? shots.filter(s => s.playerId === filterId) : shots;
+
+    let dots = '';
+    filtered.forEach(s => {
+        const cx = s.x * 300;
+        const cy = s.y * 250;
+        const color = s.isGoal ? '#10b981' : '#ef4444';
+        const opacity = s.isGoal ? 0.8 : 0.6;
+        dots += `<circle cx="${cx}" cy="${cy}" r="8" fill="${color}" fill-opacity="${opacity}" stroke="white" stroke-width="1.5"/>`;
+    });
+
+    // Build legend
+    const goalCount = filtered.filter(s => s.isGoal).length;
+    const shotCount = filtered.filter(s => !s.isGoal).length;
+
+    return `<div style="position:relative;">
+        <svg viewBox="0 0 300 250" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:400px;display:block;margin:0 auto;border-radius:8px;">
+            <rect width="300" height="250" fill="#2d5a27" rx="8"/>
+            <line x1="20" y1="30" x2="280" y2="30" stroke="rgba(255,255,255,0.85)" stroke-width="2"/>
+            <line x1="20" y1="30" x2="20" y2="250" stroke="rgba(255,255,255,0.85)" stroke-width="2"/>
+            <line x1="280" y1="30" x2="280" y2="250" stroke="rgba(255,255,255,0.85)" stroke-width="2"/>
+            <line x1="20" y1="220" x2="280" y2="220" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" stroke-dasharray="6,4"/>
+            <rect x="138" y="18" width="24" height="12" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2" rx="2"/>
+            <circle cx="150" cy="30" r="27" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2"/>
+            <line x1="100" y1="30" x2="200" y2="30" stroke="rgba(255,255,255,0.85)" stroke-width="2.5"/>
+            <line x1="148" y1="120" x2="152" y2="120" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/>
+            <line x1="148" y1="170" x2="152" y2="170" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/>
+            <line x1="60" y1="100" x2="66" y2="100" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/>
+            <line x1="234" y1="100" x2="240" y2="100" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/>
+            ${dots}
+        </svg>
+        <div style="display:flex;gap:1rem;justify-content:center;margin-top:0.5rem;font-size:0.8rem;color:var(--text-secondary,#64748b);">
+            <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#10b981;margin-right:4px;"></span>Goals (${goalCount})</span>
+            <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444;margin-right:4px;"></span>Missed (${shotCount})</span>
+        </div>
+    </div>`;
 }
 
 // ===== IN-GAME EDIT LOG =====
@@ -1235,17 +1355,17 @@ function showInGameEditLog() {
 
     const overlay = document.createElement('div');
     overlay.id = 'edit-log-overlay';
-    overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; overflow-y: auto; padding: 1rem;';
+    overlay.className = 'overlay';
 
     function renderLog() {
         const entries = buildGameLog();
         const container = document.createElement('div');
-        container.style.cssText = 'background: white; border-radius: 8px; padding: 1rem; max-width: 600px; margin: 0 auto; color: #1e293b;';
+        container.className = 'edit-log-container';
 
         container.innerHTML = '<h3 style="margin-bottom: 1rem;">Edit Game Log</h3>';
 
         if (entries.length === 0) {
-            container.innerHTML += '<p style="text-align: center; color: #64748b; font-style: italic; padding: 2rem 0;">No events recorded yet</p>';
+            container.innerHTML += '<p style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 2rem 0;">No events recorded yet</p>';
         } else {
             let currentPeriod = null;
             entries.forEach(entry => {
@@ -1253,23 +1373,23 @@ function showInGameEditLog() {
                 if (entry.period !== currentPeriod) {
                     currentPeriod = entry.period;
                     const header = document.createElement('div');
-                    header.style.cssText = 'background: #f1f5f9; padding: 0.4rem 0.75rem; font-weight: 700; font-size: 0.85rem; color: #475569; margin-top: 0.75rem; border-radius: 4px;';
+                    header.className = 'edit-log-header';
                     header.textContent = `${entry.pLabel}${entry.period}`;
                     container.appendChild(header);
                 }
 
                 const row = document.createElement('div');
-                row.style.cssText = 'display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem;';
+                row.className = 'edit-log-row';
 
                 // Time
                 const timeSpan = document.createElement('span');
-                timeSpan.style.cssText = 'min-width: 40px; color: #64748b; font-variant-numeric: tabular-nums;';
+                timeSpan.className = 'edit-log-time';
                 timeSpan.textContent = entry.time || '--';
                 row.appendChild(timeSpan);
 
                 // Player + stat
                 const descSpan = document.createElement('span');
-                descSpan.style.cssText = 'flex: 1;';
+                descSpan.className = 'edit-log-desc';
                 descSpan.innerHTML = `<strong>${entry.playerLabel}</strong> — ${entry.statLabel}`;
                 row.appendChild(descSpan);
 
@@ -1277,7 +1397,7 @@ function showInGameEditLog() {
                 if (entry.source === 'player') {
                     const editBtn = document.createElement('button');
                     editBtn.textContent = 'Edit';
-                    editBtn.style.cssText = 'padding: 0.2rem 0.5rem; font-size: 0.8rem; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer;';
+                    editBtn.className = 'btn-action-sm btn-action-sm--edit';
                     editBtn.onclick = () => reassignStat(entry.statType, entry.index, entry.playerId, overlay, renderLog);
                     row.appendChild(editBtn);
                 }
@@ -1285,7 +1405,7 @@ function showInGameEditLog() {
                 // Delete button
                 const delBtn = document.createElement('button');
                 delBtn.textContent = 'Del';
-                delBtn.style.cssText = 'padding: 0.2rem 0.5rem; font-size: 0.8rem; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;';
+                delBtn.className = 'btn-action-sm btn-action-sm--delete';
                 delBtn.onclick = () => deleteStatEntry(entry.source, entry.statType, entry.index, entry.playerId, overlay, renderLog);
                 row.appendChild(delBtn);
 
@@ -1315,20 +1435,21 @@ function reassignStat(statType, index, oldPlayerId, overlay, refreshFn) {
 
     // Build a player picker overlay on top
     const picker = document.createElement('div');
-    picker.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 1100; padding: 1rem; overflow-y: auto;';
+    picker.className = 'overlay overlay--z1100';
 
     const box = document.createElement('div');
-    box.style.cssText = 'background: white; border-radius: 8px; padding: 1rem; max-width: 400px; margin: 2rem auto; color: #1e293b;';
+    box.className = 'overlay-content overlay-content--narrow';
+    box.style.marginTop = '2rem';
     box.innerHTML = '<h3 style="margin-bottom: 1rem;">Reassign to which player?</h3>';
 
     const grid = document.createElement('div');
-    grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.5rem;';
+    grid.className = 'picker-grid';
 
     roster.forEach(player => {
         if (player.id === oldPlayerId) return; // skip current player
         const btn = document.createElement('button');
         btn.textContent = `#${player.number} ${player.name}`;
-        btn.style.cssText = 'padding: 0.6rem 0.5rem; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-size: 0.85rem; text-align: center;';
+        btn.className = 'picker-btn';
         btn.onclick = () => {
             const newPlayerId = player.id;
 
@@ -1562,24 +1683,24 @@ function editGameStats(gameId) {
     const statKeys = ['goal', 'assist', 'shot', 'ground-ball', 'faceoff-won', 'faceoff-lost', 'turnover', 'caused-turnover', 'save', 'penalty'];
     const statLabels = ['Goals', 'Assists', 'Shots', 'Ground Balls', 'Faceoff Wins', 'Faceoff Losses', 'Turnovers', 'Takeaways', 'Saves', 'Penalties'];
 
-    let html = '<div style="padding: 1rem; background: white; border-radius: 8px; max-width: 900px; margin: auto; color: #1e293b;">';
-    html += `<h3 style="color: #1e293b;">Edit Stats: vs ${game.opponent}</h3>`;
+    let html = '<div class="overlay-content overlay-content--medium">';
+    html += `<h3>Edit Stats: vs ${game.opponent}</h3>`;
 
     // Editable score
     html += '<div style="display: flex; gap: 1rem; align-items: center; margin: 1rem 0;">';
     html += '<label style="font-weight: 700;">Home:</label>';
-    html += `<input type="number" id="edit-home-score" value="${game.homeScore}" min="0" style="width: 60px; padding: 0.5rem; font-size: 1.2rem; font-weight: 700; text-align: center; border: 2px solid #cbd5e1; border-radius: 8px;">`;
+    html += `<input type="number" id="edit-home-score" value="${game.homeScore}" min="0" class="dark-input dark-input--score">`;
     html += '<label style="font-weight: 700;">Away:</label>';
-    html += `<input type="number" id="edit-away-score" value="${game.awayScore}" min="0" style="width: 60px; padding: 0.5rem; font-size: 1.2rem; font-weight: 700; text-align: center; border: 2px solid #cbd5e1; border-radius: 8px;">`;
+    html += `<input type="number" id="edit-away-score" value="${game.awayScore}" min="0" class="dark-input dark-input--score">`;
     html += '</div>';
 
     // Editable stats table
     html += '<div style="overflow-x: auto;">';
-    html += '<table style="width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.85rem;">';
-    html += '<thead><tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">';
-    html += '<th style="padding: 0.5rem; text-align: left; font-weight: 700;">Player</th>';
+    html += '<table class="stat-table" style="margin-top: 0.5rem;">';
+    html += '<thead><tr>';
+    html += '<th>Player</th>';
     statLabels.forEach(label => {
-        html += `<th style="padding: 0.5rem; text-align: center; font-weight: 700;">${label}</th>`;
+        html += `<th>${label}</th>`;
     });
     html += '</tr></thead><tbody>';
 
@@ -1587,13 +1708,12 @@ function editGameStats(gameId) {
         const stats = game.stats[player.id];
         if (!stats) return;
 
-        html += `<tr style="border-bottom: 1px solid #e2e8f0;">`;
-        html += `<td style="padding: 0.5rem; font-weight: 600; white-space: nowrap;">#${player.number} ${player.name}</td>`;
+        html += `<tr>`;
+        html += `<td>#${player.number} ${player.name}</td>`;
         statKeys.forEach(key => {
             const val = getStatCount(stats[key]);
-            html += `<td style="padding: 0.25rem; text-align: center;">`;
-            html += `<input type="number" data-player="${player.id}" data-stat="${key}" value="${val}" min="0" `;
-            html += `style="width: 44px; padding: 0.3rem; text-align: center; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem;">`;
+            html += `<td style="padding: 0.25rem;">`;
+            html += `<input type="number" data-player="${player.id}" data-stat="${key}" value="${val}" min="0" class="dark-input dark-input--stat">`;
             html += `</td>`;
         });
         html += '</tr>';
@@ -1603,30 +1723,30 @@ function editGameStats(gameId) {
 
     // Team Stats section
     const ts = game.teamStats || {};
-    const tsInput = (id, val) => `<input type="number" id="edit-ts-${id}" value="${val || 0}" min="0" style="width: 56px; padding: 0.3rem; text-align: center; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem;">`;
-    html += '<div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 2px solid #cbd5e1;">';
-    html += '<h4 style="color: #1e293b; margin-bottom: 0.75rem;">Team Stats</h4>';
+    const tsInput = (id, val) => `<input type="number" id="edit-ts-${id}" value="${val || 0}" min="0" class="dark-input dark-input--stat" style="width: 56px;">`;
+    html += '<div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 2px solid var(--border-color);">';
+    html += '<h4 style="margin-bottom: 0.75rem;">Team Stats</h4>';
     html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">';
     // Clears
-    html += '<div style="background: #f8fafc; padding: 0.75rem; border-radius: 8px;">';
+    html += '<div style="background: rgba(255,255,255,0.04); padding: 0.75rem; border-radius: 8px;">';
     html += '<div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.85rem;">Clears</div>';
     html += `<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;"><label style="font-size: 0.8rem; min-width: 70px;">Successful:</label>${tsInput('clearsSuccess', ts.clearsSuccess)}</div>`;
     html += `<div style="display: flex; align-items: center; gap: 0.5rem;"><label style="font-size: 0.8rem; min-width: 70px;">Failed:</label>${tsInput('clearsFail', ts.clearsFail)}</div>`;
     html += '</div>';
     // Opp Clears
-    html += '<div style="background: #f8fafc; padding: 0.75rem; border-radius: 8px;">';
+    html += '<div style="background: rgba(255,255,255,0.04); padding: 0.75rem; border-radius: 8px;">';
     html += '<div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.85rem;">Opponent Clears</div>';
     html += `<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;"><label style="font-size: 0.8rem; min-width: 70px;">Successful:</label>${tsInput('oppClearsSuccess', ts.oppClearsSuccess)}</div>`;
     html += `<div style="display: flex; align-items: center; gap: 0.5rem;"><label style="font-size: 0.8rem; min-width: 70px;">Failed:</label>${tsInput('oppClearsFail', ts.oppClearsFail)}</div>`;
     html += '</div>';
     // Man-Up (EMO)
-    html += '<div style="background: #f8fafc; padding: 0.75rem; border-radius: 8px;">';
+    html += '<div style="background: rgba(255,255,255,0.04); padding: 0.75rem; border-radius: 8px;">';
     html += '<div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.85rem;">Man-Up (EMO)</div>';
     html += `<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;"><label style="font-size: 0.8rem; min-width: 70px;">Opportunities:</label>${tsInput('emoOpportunities', ts.emoOpportunities)}</div>`;
     html += `<div style="display: flex; align-items: center; gap: 0.5rem;"><label style="font-size: 0.8rem; min-width: 70px;">Goals:</label>${tsInput('emoGoals', ts.emoGoals)}</div>`;
     html += '</div>';
     // Penalty Kill
-    html += '<div style="background: #f8fafc; padding: 0.75rem; border-radius: 8px;">';
+    html += '<div style="background: rgba(255,255,255,0.04); padding: 0.75rem; border-radius: 8px;">';
     html += '<div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.85rem;">Penalty Kill</div>';
     html += `<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;"><label style="font-size: 0.8rem; min-width: 70px;">Opportunities:</label>${tsInput('pkOpportunities', ts.pkOpportunities)}</div>`;
     html += `<div style="display: flex; align-items: center; gap: 0.5rem;"><label style="font-size: 0.8rem; min-width: 70px;">Goals Against:</label>${tsInput('pkGoalsAgainst', ts.pkGoalsAgainst)}</div>`;
@@ -1638,7 +1758,8 @@ function editGameStats(gameId) {
     // Create overlay
     const container = document.createElement('div');
     container.innerHTML = html;
-    container.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 1000; overflow-y: auto; padding: 2rem 1rem;';
+    container.className = 'overlay';
+    container.style.padding = '2rem 1rem';
 
     // Save button
     const saveBtn = document.createElement('button');
@@ -1715,13 +1836,13 @@ function viewGameStats(gameId) {
     if (!game) return;
 
     const roster = getRoster();
-    let statsHtml = '<div style="padding: 1.5rem; background: white; border-radius: 8px; max-width: 1200px; width: 95%; margin: auto; color: #1e293b;">';
-    statsHtml += `<h3 style="color: #1e293b;">vs ${game.opponent}</h3>`;
+    let statsHtml = '<div class="overlay-content overlay-content--wide">';
+    statsHtml += `<h3>vs ${game.opponent}</h3>`;
     statsHtml += `<p style="font-size: 1.5rem; font-weight: bold; margin: 1rem 0;">Score: ${game.homeScore} - ${game.awayScore}</p>`;
 
     const gameDate = game.completedAt ? new Date(game.completedAt) : null;
     if (gameDate) {
-        statsHtml += `<p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1rem;">${gameDate.toLocaleDateString()} at ${gameDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>`;
+        statsHtml += `<p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">${gameDate.toLocaleDateString()} at ${gameDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>`;
     }
 
     // === BOX SCORE BY PERIOD ===
@@ -1732,13 +1853,13 @@ function viewGameStats(gameId) {
         const periodLabel = isQuarters ? 'Q' : 'H';
 
         statsHtml += '<div style="overflow-x: auto; margin-bottom: 1.5rem;">';
-        statsHtml += '<table style="width: auto; border-collapse: collapse; font-size: 0.9rem;">';
-        statsHtml += '<thead><tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">';
-        statsHtml += '<th style="padding: 0.5rem 1rem; text-align: left; font-weight: 700;"></th>';
+        statsHtml += '<table class="stat-table" style="width: auto;">';
+        statsHtml += '<thead><tr>';
+        statsHtml += '<th></th>';
         for (let i = 0; i < numPeriods; i++) {
-            statsHtml += `<th style="padding: 0.5rem 0.75rem; text-align: center; font-weight: 700;">${periodLabel}${i + 1}</th>`;
+            statsHtml += `<th style="padding: 0.5rem 0.75rem;">${periodLabel}${i + 1}</th>`;
         }
-        statsHtml += '<th style="padding: 0.5rem 0.75rem; text-align: center; font-weight: 700; border-left: 2px solid #cbd5e1;">Final</th>';
+        statsHtml += '<th style="padding: 0.5rem 0.75rem; border-left: 2px solid var(--border-color);">Final</th>';
         statsHtml += '</tr></thead><tbody>';
 
         const teamName = localStorage.getItem(STORAGE_KEYS.TEAM_NAME) || 'Home';
@@ -1746,48 +1867,48 @@ function viewGameStats(gameId) {
         const awayLabel = game.trackingTeam === 'home' ? game.opponent : teamName;
 
         // Home row
-        statsHtml += '<tr style="border-bottom: 1px solid #e2e8f0;">';
-        statsHtml += `<td style="padding: 0.5rem 1rem; font-weight: 600;">${homeLabel}</td>`;
+        statsHtml += '<tr>';
+        statsHtml += `<td style="padding: 0.5rem 1rem;">${homeLabel}</td>`;
         for (let i = 0; i < numPeriods; i++) {
-            statsHtml += `<td style="padding: 0.5rem 0.75rem; text-align: center;">${ps.home[i]}</td>`;
+            statsHtml += `<td style="padding: 0.5rem 0.75rem;">${ps.home[i]}</td>`;
         }
-        statsHtml += `<td style="padding: 0.5rem 0.75rem; text-align: center; font-weight: 700; border-left: 2px solid #cbd5e1;">${game.homeScore}</td>`;
+        statsHtml += `<td style="padding: 0.5rem 0.75rem; font-weight: 700; border-left: 2px solid var(--border-color);">${game.homeScore}</td>`;
         statsHtml += '</tr>';
 
         // Away row
-        statsHtml += '<tr style="border-bottom: 1px solid #e2e8f0;">';
-        statsHtml += `<td style="padding: 0.5rem 1rem; font-weight: 600;">${awayLabel}</td>`;
+        statsHtml += '<tr>';
+        statsHtml += `<td style="padding: 0.5rem 1rem;">${awayLabel}</td>`;
         for (let i = 0; i < numPeriods; i++) {
-            statsHtml += `<td style="padding: 0.5rem 0.75rem; text-align: center;">${ps.away[i]}</td>`;
+            statsHtml += `<td style="padding: 0.5rem 0.75rem;">${ps.away[i]}</td>`;
         }
-        statsHtml += `<td style="padding: 0.5rem 0.75rem; text-align: center; font-weight: 700; border-left: 2px solid #cbd5e1;">${game.awayScore}</td>`;
+        statsHtml += `<td style="padding: 0.5rem 0.75rem; font-weight: 700; border-left: 2px solid var(--border-color);">${game.awayScore}</td>`;
         statsHtml += '</tr>';
 
         statsHtml += '</tbody></table></div>';
     }
 
-    statsHtml += '<h4 style="margin-top: 1rem; color: #1e293b;">Player Statistics</h4>';
+    statsHtml += '<h4 style="margin-top: 1rem;">Player Statistics</h4>';
 
     statsHtml += `
         <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.85rem;">
+            <table class="stat-table stat-table-sticky" style="margin-top: 0.5rem;">
                 <thead>
-                    <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
-                        <th style="padding: 0.5rem; text-align: left; font-weight: 700; position: sticky; left: 0; background: #f1f5f9; z-index: 1; white-space: nowrap;">Player</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Goals</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Assists</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Points</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Shots</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Shot %</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Ground Balls</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Faceoff Wins</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Faceoff Losses</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">FO Win %</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Turnovers</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Takeaways</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Saves</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Penalties</th>
-                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">PIM</th>
+                    <tr>
+                        <th>Player</th>
+                        <th>Goals</th>
+                        <th>Assists</th>
+                        <th>Points</th>
+                        <th>Shots</th>
+                        <th>Shot %</th>
+                        <th>Ground Balls</th>
+                        <th>Faceoff Wins</th>
+                        <th>Faceoff Losses</th>
+                        <th>FO Win %</th>
+                        <th>Turnovers</th>
+                        <th>Takeaways</th>
+                        <th>Saves</th>
+                        <th>Penalties</th>
+                        <th>PIM</th>
                     </tr>
                 </thead>
                 <tbody>`;
@@ -1823,31 +1944,31 @@ function viewGameStats(gameId) {
         maxVals[k] = vals.length > 0 ? Math.max(...vals) : -1;
     });
 
-    const grn = (val, key) => val > 0 && val === maxVals[key] ? 'color: #16a34a; font-weight: 700;' : '';
+    const grn = (val, key) => val > 0 && val === maxVals[key] ? 'color: var(--color-green-text); font-weight: 700;' : '';
 
     playerRows.forEach(r => {
         statsHtml += `
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 0.5rem; font-weight: 600; position: sticky; left: 0; background: white; z-index: 1; white-space: nowrap;">#${r.player.number} ${r.player.name}</td>
-                <td style="padding: 0.5rem; text-align: center; ${grn(r.goals,'goals')}">${r.goals}</td>
-                <td style="padding: 0.5rem; text-align: center; ${grn(r.assists,'assists')}">${r.assists}</td>
-                <td style="padding: 0.5rem; text-align: center; font-weight: 600; ${grn(r.points,'points')}">${r.points}</td>
-                <td style="padding: 0.5rem; text-align: center; ${grn(r.shots,'shots')}">${r.shots}</td>
-                <td style="padding: 0.5rem; text-align: center; ${grn(r.shotPct,'shotPct')}">${r.shotPct >= 0 ? r.shotPct + '%' : '-'}</td>
-                <td style="padding: 0.5rem; text-align: center; ${grn(r.gb,'gb')}">${r.gb}</td>
-                <td style="padding: 0.5rem; text-align: center; ${grn(r.fow,'fow')}">${r.fow}</td>
-                <td style="padding: 0.5rem; text-align: center; ${grn(r.fol,'fol')}">${r.fol}</td>
-                <td style="padding: 0.5rem; text-align: center; ${grn(r.foPct,'foPct')}">${r.foPct >= 0 ? r.foPct + '%' : '-'}</td>
-                <td style="padding: 0.5rem; text-align: center;">${r.to}</td>
-                <td style="padding: 0.5rem; text-align: center; ${grn(r.ta,'ta')}">${r.ta}</td>
-                <td style="padding: 0.5rem; text-align: center; ${grn(r.sv,'sv')}">${r.sv}</td>
-                <td style="padding: 0.5rem; text-align: center;">${r.pen}</td>
-                <td style="padding: 0.5rem; text-align: center;">${r.pim > 0 ? formatPIM(r.pim) : '-'}</td>
+            <tr>
+                <td>#${r.player.number} ${r.player.name}</td>
+                <td style="${grn(r.goals,'goals')}">${r.goals}</td>
+                <td style="${grn(r.assists,'assists')}">${r.assists}</td>
+                <td style="font-weight: 600; ${grn(r.points,'points')}">${r.points}</td>
+                <td style="${grn(r.shots,'shots')}">${r.shots}</td>
+                <td style="${grn(r.shotPct,'shotPct')}">${r.shotPct >= 0 ? r.shotPct + '%' : '-'}</td>
+                <td style="${grn(r.gb,'gb')}">${r.gb}</td>
+                <td style="${grn(r.fow,'fow')}">${r.fow}</td>
+                <td style="${grn(r.fol,'fol')}">${r.fol}</td>
+                <td style="${grn(r.foPct,'foPct')}">${r.foPct >= 0 ? r.foPct + '%' : '-'}</td>
+                <td>${r.to}</td>
+                <td style="${grn(r.ta,'ta')}">${r.ta}</td>
+                <td style="${grn(r.sv,'sv')}">${r.sv}</td>
+                <td>${r.pen}</td>
+                <td>${r.pim > 0 ? formatPIM(r.pim) : '-'}</td>
             </tr>`;
     });
 
     if (playerRows.length === 0) {
-        statsHtml += `<tr><td colspan="15" style="padding: 1rem; text-align: center; color: #64748b; font-style: italic;">No stats recorded</td></tr>`;
+        statsHtml += `<tr><td colspan="15" style="padding: 1rem; text-align: center; color: var(--text-secondary); font-style: italic;">No stats recorded</td></tr>`;
     }
 
     statsHtml += `</tbody></table></div>`;
@@ -1879,8 +2000,8 @@ function viewGameStats(gameId) {
         const oppClrTotal = oppClrSuccess + oppClrFail;
         const pkSuccessful = (ts.pkOpportunities || 0) - (ts.pkGoalsAgainst || 0);
 
-        statsHtml += '<div style="margin-top: 1.5rem; padding: 1rem; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">';
-        statsHtml += '<h4 style="color: #1e293b; margin-bottom: 0.75rem;">Team Stats</h4>';
+        statsHtml += '<div class="team-stats-card">';
+        statsHtml += '<h4 style="margin-bottom: 0.75rem;">Team Stats</h4>';
         statsHtml += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.9rem;">';
 
         if (hasClears) {
@@ -2007,37 +2128,87 @@ function viewGameStats(gameId) {
         // === SCORING SUMMARY (goals + assists only) ===
         const scoringEvents = gameLogEvents.filter(e => e.statKey === 'goal' || e.statKey === 'assist');
         if (scoringEvents.length > 0) {
-            statsHtml += '<h4 style="margin-top: 1.5rem; color: #1e293b;">Scoring Summary</h4>';
-            statsHtml += '<div style="border: 1px solid #e2e8f0; border-radius: 8px; margin-top: 0.5rem; overflow: hidden;">';
-            statsHtml += '<table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+            statsHtml += '<h4 style="margin-top: 1.5rem;">Scoring Summary</h4>';
+            statsHtml += '<div style="border: 1px solid var(--border-color); border-radius: 8px; margin-top: 0.5rem; overflow: hidden;">';
+            statsHtml += '<table class="stat-log-table">';
 
             scoringEvents.forEach((evt, i) => {
-                const bg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
-                const goalStyle = evt.isGoal ? 'font-weight: 700; color: #16a34a;' : 'color: #64748b; font-style: italic;';
-                const oppStyle = evt.isOpponent ? 'color: #dc2626;' : '';
-                statsHtml += `<tr style="background: ${bg}; border-bottom: 1px solid #f1f5f9;">`;
-                statsHtml += `<td style="padding: 0.4rem 0.75rem; white-space: nowrap; color: #64748b; font-family: monospace;">${periodLabel}${evt.period} ${evt.time}</td>`;
-                statsHtml += `<td style="padding: 0.4rem 0.75rem; ${oppStyle}">${evt.label}</td>`;
-                statsHtml += `<td style="padding: 0.4rem 0.75rem; ${goalStyle}">${evt.stat}</td>`;
+                const goalStyle = evt.isGoal ? 'font-weight: 700; color: var(--color-green-text);' : 'color: var(--text-secondary); font-style: italic;';
+                const oppStyle = evt.isOpponent ? 'color: var(--color-opponent);' : '';
+                statsHtml += `<tr>`;
+                statsHtml += `<td style="white-space: nowrap; color: var(--text-secondary); font-family: monospace;">${periodLabel}${evt.period} ${evt.time}</td>`;
+                statsHtml += `<td style="${oppStyle}">${evt.label}</td>`;
+                statsHtml += `<td style="${goalStyle}">${evt.stat}</td>`;
                 statsHtml += '</tr>';
             });
 
             statsHtml += '</table></div>';
         }
 
+        // === SHOT CHART ===
+        const shotChartData = [];
+        if (game.stats) {
+            Object.keys(game.stats).forEach(playerId => {
+                const ps = game.stats[playerId];
+                const player = roster.find(p => p.id === playerId);
+                if (!player || !Array.isArray(ps.shot)) return;
+                const goalTimestamps = Array.isArray(ps.goal) ? ps.goal : [];
+                ps.shot.forEach(shotTs => {
+                    if (shotTs && typeof shotTs.x === 'number' && typeof shotTs.y === 'number') {
+                        const isGoal = goalTimestamps.some(gTs => gTs.period === shotTs.period && gTs.timeRemaining === shotTs.timeRemaining);
+                        shotChartData.push({ x: shotTs.x, y: shotTs.y, isGoal, playerId, playerLabel: `#${player.number} ${player.name}` });
+                    }
+                });
+            });
+        }
+
+        if (shotChartData.length > 0) {
+            // Collect unique players who have shot location data
+            const shotPlayers = [];
+            const seenIds = {};
+            shotChartData.forEach(s => {
+                if (!seenIds[s.playerId]) {
+                    seenIds[s.playerId] = true;
+                    shotPlayers.push({ id: s.playerId, label: s.playerLabel });
+                }
+            });
+            shotPlayers.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+
+            const chartId = 'game-shot-chart-' + (game.id || Date.now());
+            statsHtml += '<h4 style="margin-top: 1.5rem;">Shot Chart</h4>';
+            statsHtml += `<div style="margin-top: 0.5rem;">`;
+            statsHtml += `<select id="${chartId}-filter" onchange="window._updateGameShotChart_${game.id ? game.id.replace(/[^a-zA-Z0-9]/g, '_') : 'x'}()" class="dark-input" style="padding: 0.5rem; font-size: 0.9rem; border-radius: 6px; margin-bottom: 0.75rem;">`;
+            statsHtml += `<option value="">All Players</option>`;
+            shotPlayers.forEach(sp => {
+                statsHtml += `<option value="${sp.id}">${sp.label}</option>`;
+            });
+            statsHtml += `</select>`;
+            statsHtml += `<div id="${chartId}-container">${buildShotChartSVG(shotChartData)}</div>`;
+            statsHtml += `</div>`;
+
+            // Create update function on window for the filter dropdown
+            const fnName = `_updateGameShotChart_${game.id ? game.id.replace(/[^a-zA-Z0-9]/g, '_') : 'x'}`;
+            window[fnName] = function() {
+                const sel = document.getElementById(`${chartId}-filter`);
+                const ctr = document.getElementById(`${chartId}-container`);
+                if (sel && ctr) {
+                    ctr.innerHTML = buildShotChartSVG(shotChartData, { highlightPlayerId: sel.value || null });
+                }
+            };
+        }
+
         // === FULL GAME LOG ===
-        statsHtml += '<h4 style="margin-top: 1.5rem; color: #1e293b;">Game Log</h4>';
-        statsHtml += '<div style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; margin-top: 0.5rem;">';
-        statsHtml += '<table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+        statsHtml += '<h4 style="margin-top: 1.5rem;">Game Log</h4>';
+        statsHtml += '<div style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; margin-top: 0.5rem;">';
+        statsHtml += '<table class="stat-log-table">';
 
         gameLogEvents.forEach((evt, i) => {
-            const bg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
-            const goalStyle = evt.isGoal ? 'font-weight: 700; color: #16a34a;' : '';
-            const oppStyle = evt.isOpponent ? 'color: #dc2626;' : '';
-            statsHtml += `<tr style="background: ${bg}; border-bottom: 1px solid #f1f5f9;">`;
-            statsHtml += `<td style="padding: 0.4rem 0.75rem; white-space: nowrap; color: #64748b; font-family: monospace;">${periodLabel}${evt.period} ${evt.time}</td>`;
-            statsHtml += `<td style="padding: 0.4rem 0.75rem; ${oppStyle}">${evt.label}</td>`;
-            statsHtml += `<td style="padding: 0.4rem 0.75rem; ${goalStyle}">${evt.stat}</td>`;
+            const goalStyle = evt.isGoal ? 'font-weight: 700; color: var(--color-green-text);' : '';
+            const oppStyle = evt.isOpponent ? 'color: var(--color-opponent);' : '';
+            statsHtml += `<tr>`;
+            statsHtml += `<td style="white-space: nowrap; color: var(--text-secondary); font-family: monospace;">${periodLabel}${evt.period} ${evt.time}</td>`;
+            statsHtml += `<td style="${oppStyle}">${evt.label}</td>`;
+            statsHtml += `<td style="${goalStyle}">${evt.stat}</td>`;
             statsHtml += '</tr>';
         });
 
@@ -2048,7 +2219,8 @@ function viewGameStats(gameId) {
 
     const container = document.createElement('div');
     container.innerHTML = statsHtml;
-    container.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 1000; overflow-y: auto; padding: 2rem 1rem;';
+    container.className = 'overlay';
+    container.style.padding = '2rem 1rem';
     container.onclick = (e) => {
         if (e.target === container) container.remove();
     };
@@ -2405,6 +2577,76 @@ function loadSeasonSummary() {
     html += `</select>`;
     html += `<div id="player-gamelog-table"></div>`;
     html += `</div>`;
+
+    // ========== 5. SEASON SHOT CHART ==========
+    const seasonShotData = [];
+    games.forEach(game => {
+        if (!game.stats) return;
+        Object.keys(game.stats).forEach(playerId => {
+            const ps = game.stats[playerId];
+            const player = roster.find(p => p.id === playerId);
+            if (!player || !Array.isArray(ps.shot)) return;
+            const goalTimestamps = Array.isArray(ps.goal) ? ps.goal : [];
+            ps.shot.forEach(shotTs => {
+                if (shotTs && typeof shotTs.x === 'number' && typeof shotTs.y === 'number') {
+                    const isGoal = goalTimestamps.some(gTs => gTs.period === shotTs.period && gTs.timeRemaining === shotTs.timeRemaining);
+                    seasonShotData.push({ x: shotTs.x, y: shotTs.y, isGoal, playerId, playerLabel: `#${player.number} ${player.name}` });
+                }
+            });
+        });
+    });
+
+    if (seasonShotData.length > 0) {
+        const shotPlayers = [];
+        const seenIds = {};
+        seasonShotData.forEach(s => {
+            if (!seenIds[s.playerId]) {
+                seenIds[s.playerId] = true;
+                shotPlayers.push({ id: s.playerId, label: s.playerLabel });
+            }
+        });
+        shotPlayers.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+
+        html += `<div style="background: var(--card-bg); padding: 1.25rem; border-radius: 12px; margin-bottom: 1.5rem; border: 2px solid #8b5cf6;">`;
+        html += `<h3 style="margin-bottom: 1rem; color: var(--text-primary);">Season Shot Chart</h3>`;
+        html += `<select id="season-shot-chart-filter" onchange="window._updateSeasonShotChart()" style="width: 100%; padding: 0.75rem; font-size: 1rem; border-radius: 8px; border: 2px solid var(--border-color); background: var(--bg-color); color: var(--text-primary); margin-bottom: 1rem; cursor: pointer;">`;
+        html += `<option value="">All Players</option>`;
+        shotPlayers.forEach(sp => {
+            html += `<option value="${sp.id}">${sp.label}</option>`;
+        });
+        html += `</select>`;
+        html += `<div id="season-shot-chart-container">${buildShotChartSVG(seasonShotData)}</div>`;
+        html += `<div id="season-shot-chart-stats" style="margin-top:0.75rem;font-size:0.85rem;color:var(--text-secondary);text-align:center;"></div>`;
+        html += `</div>`;
+
+        // Store data for filter function
+        window._seasonShotData = seasonShotData;
+        window._updateSeasonShotChart = function() {
+            const sel = document.getElementById('season-shot-chart-filter');
+            const ctr = document.getElementById('season-shot-chart-container');
+            const statsDiv = document.getElementById('season-shot-chart-stats');
+            if (!sel || !ctr) return;
+            const filterId = sel.value || null;
+            ctr.innerHTML = buildShotChartSVG(window._seasonShotData, { highlightPlayerId: filterId });
+
+            // Show per-player stats when filtered
+            if (filterId && statsDiv) {
+                const playerShots = window._seasonShotData.filter(s => s.playerId === filterId);
+                const goals = playerShots.filter(s => s.isGoal).length;
+                const total = playerShots.length;
+                const pct = total > 0 ? Math.round(goals / total * 100) : 0;
+                const label = playerShots.length > 0 ? playerShots[0].playerLabel : '';
+                statsDiv.innerHTML = `<strong>${label}</strong>: ${goals} goals on ${total} shots (${pct}% shooting)`;
+            } else if (statsDiv) {
+                const goals = window._seasonShotData.filter(s => s.isGoal).length;
+                const total = window._seasonShotData.length;
+                const pct = total > 0 ? Math.round(goals / total * 100) : 0;
+                statsDiv.innerHTML = `Team: ${goals} goals on ${total} shots (${pct}% shooting)`;
+            }
+        };
+        // Trigger initial stats display
+        setTimeout(() => { if (window._updateSeasonShotChart) window._updateSeasonShotChart(); }, 0);
+    }
 
     html += '</div>';
     display.innerHTML = html;
@@ -3189,12 +3431,19 @@ function executeVoiceCommand(parsed) {
             showVoiceFeedback('Recorded!', result.description);
             pushUndo(result.undoActions, result.description);
 
-            // Prompt for assist after goal (delayed, pass goal timestamp)
+            // Prompt for shot location, then assist for goals
             if (parsed.stat === 'goal') {
                 const goalTs = result.timestamp;
                 voiceAssistTimeout = setTimeout(() => {
                     hideVoiceFeedback();
-                    promptForAssist(player.id, goalTs);
+                    promptShotLocation(goalTs, () => {
+                        promptForAssist(player.id, goalTs);
+                    });
+                }, 800);
+            } else if (parsed.stat === 'shot') {
+                setTimeout(() => {
+                    hideVoiceFeedback();
+                    promptShotLocation(result.timestamp, () => {});
                 }, 800);
             } else {
                 setTimeout(hideVoiceFeedback, 1500);
