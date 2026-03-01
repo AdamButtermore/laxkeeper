@@ -14,6 +14,7 @@ A mobile-friendly web app for tracking lacrosse game stats in real-time. Built f
 - **Season Summary** — aggregated player stats and per-game averages across all completed games
 - **Cloud Sync** — multiple devices see the same roster and game data in real-time
 - **Export/Import** — backup and restore all data as JSON
+- **Edit Stats** — correct any stat or score on completed games after the fact
 - **Penalty Tracking** — timed penalties that count down with the game clock
 - **Works Offline** — all data is stored locally; no internet required after initial load
 
@@ -110,7 +111,8 @@ Scroll to the bottom of the live game screen and tap **End Game**. You'll be ask
 1. Tap **Game History** from the home screen
 2. Each completed game shows the opponent, score, result (W/L/T), and date
 3. Tap **View Stats** to see the full player stat table for that game
-4. Tap **Delete Game** to permanently remove a game (requires 3 confirmations — this cannot be undone)
+4. Tap **Edit Stats** to correct any stats or the score after the fact
+5. Tap **Delete Game** to permanently remove a game (requires 3 confirmations — this cannot be undone)
 
 ### 11. View Season Summary
 
