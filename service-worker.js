@@ -1,19 +1,19 @@
 // LaxKeeper Service Worker
 // Caches app shell for offline use and fast loading
 
-var CACHE_NAME = 'laxkeeper-v5';
+var CACHE_NAME = 'laxkeeper-v6';
 var URLS_TO_CACHE = [
-    '/laxkeeper/',
-    '/laxkeeper/index.html',
-    '/laxkeeper/styles.css',
-    '/laxkeeper/app.js',
-    '/laxkeeper/firebase-config.js',
-    '/laxkeeper/firebase-sync.js',
-    '/laxkeeper/logo.png',
-    '/laxkeeper/icon-192.png',
-    '/laxkeeper/icon-512.png',
-    '/laxkeeper/apple-touch-icon.png',
-    '/laxkeeper/manifest.json'
+    '/',
+    '/index.html',
+    '/styles.css',
+    '/app.js',
+    '/firebase-config.js',
+    '/firebase-sync.js',
+    '/logo.png',
+    '/icon-192.png',
+    '/icon-512.png',
+    '/apple-touch-icon.png',
+    '/manifest.json'
 ];
 
 // Install — cache app shell
