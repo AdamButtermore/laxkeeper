@@ -99,8 +99,13 @@ var LaxSync = (function () {
     function syncTeamsFromFirestore(user, retryCount) {
         if (!user) return;
         retryCount = retryCount || 0;
-        var userRef = firebase.firestore().collection('users').doc(user.uid);
-        userRef.get({ source: 'server' }).then(function (doc) {
+
+        // Force fresh auth token then read
+        user.getIdToken(true).then(function () {
+            console.log('[LaxSync] Auth token refreshed, reading user doc:', user.uid);
+            var userRef = firebase.firestore().collection('users').doc(user.uid);
+            return userRef.get({ source: 'server' });
+        }).then(function (doc) {
             if (doc.exists && doc.data().teams && doc.data().teams.length > 0) {
                 var cloudTeams = doc.data().teams;
                 var localTeams = getUserTeams();
