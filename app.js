@@ -1451,11 +1451,8 @@ function loadSeasonSummary() {
             const playerGameStats = game.stats[playerId];
             const playerSeasonStats = seasonStats[playerId];
 
-            // Check if player has any stats in this game
-            const totalGameStats = Object.values(playerGameStats).reduce((a, b) => a + getStatCount(b), 0);
-            if (totalGameStats > 0) {
-                playerSeasonStats.gamesPlayed++;
-            }
+            // Player was on the roster when this game was played
+            playerSeasonStats.gamesPlayed++;
 
             playerSeasonStats.totalGoals += getStatCount(playerGameStats.goal);
             playerSeasonStats.totalAssists += getStatCount(playerGameStats.assist);
