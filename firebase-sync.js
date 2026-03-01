@@ -1,5 +1,6 @@
 // LaxKeeper Firebase Sync Layer
 // Transparently syncs localStorage to Firestore via team codes
+// Supports multiple teams per user with a team switcher
 
 var LaxSync = (function () {
     'use strict';
@@ -12,7 +13,13 @@ var LaxSync = (function () {
         'laxkeeper_team_name': 'settings'
     };
 
-    var TEAM_CODE_KEY = 'laxkeeper_team_code';
+    // Old single-team key (for migration)
+    var OLD_TEAM_CODE_KEY = 'laxkeeper_team_code';
+
+    // New multi-team keys
+    var USER_TEAMS_KEY = 'laxkeeper_user_teams';   // JSON array of { code, name }
+    var ACTIVE_TEAM_KEY = 'laxkeeper_active_team';  // string code
+
     var CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
     var uid = null;
@@ -34,25 +41,152 @@ var LaxSync = (function () {
             }
             uid = user.uid;
 
-            var teamCode = localStorage.getItem(TEAM_CODE_KEY);
+            // Run migration from old single-team format
+            migrateOldTeamCode();
+
+            // Sync teams from Firestore user doc into localStorage
+            syncTeamsFromFirestore(user);
+
+            var activeCode = getActiveTeam();
 
             // Always install the monkey-patch (dormant if no team)
             monkeyPatchLocalStorage();
 
-            if (teamCode) {
+            if (activeCode) {
                 // Connected to a team — sync to team path
-                userDocRef = firebase.firestore().collection('teams').doc(teamCode).collection('data');
+                userDocRef = firebase.firestore().collection('teams').doc(activeCode).collection('data');
 
                 hydrateFromFirestore().then(function () {
                     setupRealtimeListeners();
                     loadTeamUI();
-                    console.log('[LaxSync] Sync active for team:', teamCode);
+                    updateActiveTeamDisplay();
+                    console.log('[LaxSync] Sync active for team:', activeCode);
                 });
             } else {
                 // No team — monkey-patch installed but dormant
                 loadTeamUI();
+                updateActiveTeamDisplay();
                 console.log('[LaxSync] Sync layer installed (dormant, no team)');
             }
+        });
+    }
+
+    // ---- Migration from old single-team key ----
+    function migrateOldTeamCode() {
+        var oldCode = localStorage.getItem(OLD_TEAM_CODE_KEY);
+        if (!oldCode) return;
+
+        var existingTeams = getUserTeams();
+        // Only migrate if we haven't already
+        if (existingTeams.some(function (t) { return t.code === oldCode; })) {
+            localStorage.removeItem(OLD_TEAM_CODE_KEY);
+            return;
+        }
+
+        var teamName = localStorage.getItem('laxkeeper_team_name') || 'My Team';
+        existingTeams.push({ code: oldCode, name: teamName });
+        localStorage.setItem(USER_TEAMS_KEY, JSON.stringify(existingTeams));
+        localStorage.setItem(ACTIVE_TEAM_KEY, oldCode);
+        localStorage.removeItem(OLD_TEAM_CODE_KEY);
+        console.log('[LaxSync] Migrated old team code:', oldCode);
+    }
+
+    // ---- Sync teams list from Firestore user doc ----
+    function syncTeamsFromFirestore(user) {
+        if (!user) return;
+        var userRef = firebase.firestore().collection('users').doc(user.uid);
+        userRef.get().then(function (doc) {
+            if (doc.exists && doc.data().teams && doc.data().teams.length > 0) {
+                var cloudTeams = doc.data().teams;
+                var localTeams = getUserTeams();
+
+                // Merge: add any cloud teams not already local
+                var localCodes = {};
+                localTeams.forEach(function (t) { localCodes[t.code] = true; });
+
+                var merged = localTeams.slice();
+                cloudTeams.forEach(function (ct) {
+                    if (!localCodes[ct.code]) {
+                        merged.push({ code: ct.code, name: ct.name || ct.code });
+                    }
+                });
+
+                localStorage.setItem(USER_TEAMS_KEY, JSON.stringify(merged));
+
+                // If no active team but we have teams, set the first one
+                if (!getActiveTeam() && merged.length > 0) {
+                    var activeFromCloud = doc.data().activeTeam;
+                    if (activeFromCloud && merged.some(function (t) { return t.code === activeFromCloud; })) {
+                        localStorage.setItem(ACTIVE_TEAM_KEY, activeFromCloud);
+                    } else {
+                        localStorage.setItem(ACTIVE_TEAM_KEY, merged[0].code);
+                    }
+                }
+
+                loadTeamUI();
+                updateActiveTeamDisplay();
+            }
+        }).catch(function (err) {
+            console.error('[LaxSync] Failed to sync teams from Firestore:', err);
+        });
+    }
+
+    // ---- Team getters/setters ----
+    function getActiveTeam() {
+        return localStorage.getItem(ACTIVE_TEAM_KEY) || '';
+    }
+
+    function getUserTeams() {
+        var raw = localStorage.getItem(USER_TEAMS_KEY);
+        if (!raw) return [];
+        try { return JSON.parse(raw); } catch (e) { return []; }
+    }
+
+    function setUserTeams(teams) {
+        localStorage.setItem(USER_TEAMS_KEY, JSON.stringify(teams));
+    }
+
+    // ---- Persist teams to Firestore user doc ----
+    function persistTeamsToFirestore() {
+        if (!uid) return;
+        var teams = getUserTeams().map(function (t) {
+            return { code: t.code, name: t.name, joinedAt: t.joinedAt || null };
+        });
+        var userRef = firebase.firestore().collection('users').doc(uid);
+        userRef.set({
+            teams: teams,
+            activeTeam: getActiveTeam(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true }).catch(function (err) {
+            console.error('[LaxSync] Failed to persist teams:', err);
+        });
+    }
+
+    // ---- Team Switching ----
+    function switchTeam(code) {
+        var teams = getUserTeams();
+        if (!teams.some(function (t) { return t.code === code; })) {
+            console.warn('[LaxSync] Cannot switch to team not in list:', code);
+            return;
+        }
+
+        // Detach old listeners
+        detachListeners();
+
+        // Set new active team
+        localStorage.setItem(ACTIVE_TEAM_KEY, code);
+
+        // Point at new Firestore path
+        userDocRef = firebase.firestore().collection('teams').doc(code).collection('data');
+
+        // Hydrate localStorage from the new team's Firestore data
+        hydrateFromFirestore().then(function () {
+            setupRealtimeListeners();
+            loadTeamUI();
+            updateActiveTeamDisplay();
+            refreshUI();
+            persistTeamsToFirestore();
+            console.log('[LaxSync] Switched to team:', code);
         });
     }
 
@@ -165,6 +299,16 @@ var LaxSync = (function () {
 
         if (key === 'laxkeeper_team_name') {
             userDocRef.doc(docName).set({ teamName: value, updatedAt: now }).catch(logError);
+
+            // Also update the team name in our local teams array
+            var activeCode = getActiveTeam();
+            if (activeCode) {
+                var teams = getUserTeams();
+                teams.forEach(function (t) {
+                    if (t.code === activeCode) t.name = value;
+                });
+                setUserTeams(teams);
+            }
         } else {
             var parsed = safeJSONParse(value);
             if (parsed !== null) {
@@ -261,10 +405,6 @@ var LaxSync = (function () {
             alert('Still connecting to cloud. Please wait a moment and try again.');
             return;
         }
-        if (localStorage.getItem(TEAM_CODE_KEY)) {
-            alert('You are already connected to a team. Leave first to create a new one.');
-            return;
-        }
 
         var code = generateTeamCode();
         var db = firebase.firestore();
@@ -291,8 +431,13 @@ var LaxSync = (function () {
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 createdBy: uid
             }).then(function () {
-                // Store the team code locally
-                localStorage.setItem(TEAM_CODE_KEY, code);
+                // Add to local teams array
+                var teams = getUserTeams();
+                teams.push({ code: code, name: teamName, joinedAt: new Date().toISOString() });
+                setUserTeams(teams);
+
+                // Set as active team
+                localStorage.setItem(ACTIVE_TEAM_KEY, code);
 
                 // Switch sync target to team path
                 switchToTeamPath(code);
@@ -303,7 +448,11 @@ var LaxSync = (function () {
                 // Setup realtime listeners
                 setupRealtimeListeners();
 
+                // Persist teams to user doc
+                persistTeamsToFirestore();
+
                 loadTeamUI();
+                updateActiveTeamDisplay();
                 console.log('[LaxSync] Team created with code:', code);
                 alert('Team created! Your code is: ' + code);
             });
@@ -318,16 +467,20 @@ var LaxSync = (function () {
             alert('Still connecting to cloud. Please wait a moment and try again.');
             return;
         }
-        if (localStorage.getItem(TEAM_CODE_KEY)) {
-            alert('You are already connected to a team. Leave first to join another.');
-            return;
-        }
 
         var input = document.getElementById('join-team-code');
         var code = (input ? input.value : '').toUpperCase().trim();
 
         if (code.length !== 6) {
             alert('Please enter a 6-character team code.');
+            return;
+        }
+
+        // Check if already a member
+        var teams = getUserTeams();
+        if (teams.some(function (t) { return t.code === code; })) {
+            alert('You are already a member of this team.');
+            if (input) input.value = '';
             return;
         }
 
@@ -342,12 +495,16 @@ var LaxSync = (function () {
 
             var teamData = doc.data();
             var teamLabel = teamData.teamName || code;
-            if (!confirm('Join team "' + teamLabel + '"? Your local roster and game history will be replaced with the team\'s data.')) {
+            if (!confirm('Join team "' + teamLabel + '"? This will switch you to the team\'s data.')) {
                 return;
             }
 
-            // Store the team code locally
-            localStorage.setItem(TEAM_CODE_KEY, code);
+            // Add to local teams array
+            teams.push({ code: code, name: teamLabel, joinedAt: new Date().toISOString() });
+            setUserTeams(teams);
+
+            // Set as active team
+            localStorage.setItem(ACTIVE_TEAM_KEY, code);
 
             // Switch sync target to team path
             switchToTeamPath(code);
@@ -355,7 +512,12 @@ var LaxSync = (function () {
             // Pull team data down to local (team data wins)
             hydrateFromFirestore().then(function () {
                 setupRealtimeListeners();
+
+                // Persist teams to user doc
+                persistTeamsToFirestore();
+
                 loadTeamUI();
+                updateActiveTeamDisplay();
                 if (input) input.value = '';
                 console.log('[LaxSync] Joined team:', code);
             });
@@ -365,21 +527,52 @@ var LaxSync = (function () {
         });
     }
 
-    function leaveTeam() {
-        if (!confirm('Leave this team? Your data will stay on your device but will no longer sync.')) {
+    function leaveTeam(code) {
+        if (!code) code = getActiveTeam();
+        if (!code) return;
+
+        var teams = getUserTeams();
+        var team = teams.find(function (t) { return t.code === code; });
+        var teamLabel = team ? team.name : code;
+
+        if (!confirm('Leave team "' + teamLabel + '"? Your data will stay on the device but will no longer sync.')) {
             return;
         }
 
-        detachListeners();
-        localStorage.removeItem(TEAM_CODE_KEY);
-        userDocRef = null;
+        // Remove from teams array
+        teams = teams.filter(function (t) { return t.code !== code; });
+        setUserTeams(teams);
 
+        // If we left the active team, switch to another or clear
+        if (getActiveTeam() === code) {
+            detachListeners();
+            userDocRef = null;
+
+            if (teams.length > 0) {
+                // Switch to the first remaining team
+                localStorage.setItem(ACTIVE_TEAM_KEY, teams[0].code);
+                userDocRef = firebase.firestore().collection('teams').doc(teams[0].code).collection('data');
+                hydrateFromFirestore().then(function () {
+                    setupRealtimeListeners();
+                    loadTeamUI();
+                    updateActiveTeamDisplay();
+                    refreshUI();
+                    persistTeamsToFirestore();
+                });
+                return;
+            } else {
+                localStorage.removeItem(ACTIVE_TEAM_KEY);
+            }
+        }
+
+        persistTeamsToFirestore();
         loadTeamUI();
-        console.log('[LaxSync] Left team. Data preserved locally, sync disabled.');
+        updateActiveTeamDisplay();
+        console.log('[LaxSync] Left team:', code);
     }
 
-    function copyTeamCode() {
-        var code = localStorage.getItem(TEAM_CODE_KEY);
+    function copyTeamCode(code) {
+        if (!code) code = getActiveTeam();
         if (!code) return;
 
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -395,21 +588,53 @@ var LaxSync = (function () {
 
     // ---- Settings UI ----
     function loadTeamUI() {
-        var teamCode = localStorage.getItem(TEAM_CODE_KEY);
-        var noSync = document.getElementById('team-no-sync');
-        var connected = document.getElementById('team-connected');
-        var codeDisplay = document.getElementById('display-team-code');
+        var container = document.getElementById('team-list-container');
+        if (!container) return; // settings screen not rendered yet
 
-        if (!noSync || !connected) return; // settings screen not rendered yet
+        var teams = getUserTeams();
+        var activeCode = getActiveTeam();
 
-        if (teamCode) {
-            noSync.style.display = 'none';
-            connected.style.display = 'block';
-            if (codeDisplay) codeDisplay.textContent = teamCode;
-        } else {
-            noSync.style.display = 'block';
-            connected.style.display = 'none';
+        if (teams.length === 0) {
+            container.innerHTML = '<div class="team-list-empty">No teams yet. Create or join a team to sync data across devices.</div>';
+            return;
         }
+
+        var html = '<div class="team-list">';
+        teams.forEach(function (team) {
+            var isActive = team.code === activeCode;
+            html += '<div class="team-list-item' + (isActive ? ' active' : '') + '" onclick="LaxSync.switchTeam(\'' + team.code + '\')">';
+            html += '  <div class="team-list-item-info">';
+            html += '    <div class="team-list-item-name">' + escapeHtml(team.name) + '</div>';
+            html += '    <div class="team-list-item-code">' + team.code + '</div>';
+            html += '  </div>';
+            if (isActive) {
+                html += '  <span class="team-list-item-active-label">Active</span>';
+            }
+            html += '  <div class="team-list-item-actions">';
+            html += '    <button class="team-copy-btn" onclick="event.stopPropagation(); LaxSync.copyTeamCode(\'' + team.code + '\')">Copy</button>';
+            html += '    <button class="team-leave-btn" onclick="event.stopPropagation(); LaxSync.leaveTeam(\'' + team.code + '\')">Leave</button>';
+            html += '  </div>';
+            html += '</div>';
+        });
+        html += '</div>';
+
+        container.innerHTML = html;
+    }
+
+    // ---- Active Team Display on Home Screen ----
+    function updateActiveTeamDisplay() {
+        var badge = document.getElementById('active-team-display');
+        if (!badge) return;
+
+        var activeCode = getActiveTeam();
+        if (!activeCode) {
+            badge.textContent = '';
+            return;
+        }
+
+        var teams = getUserTeams();
+        var activeTeam = teams.find(function (t) { return t.code === activeCode; });
+        badge.textContent = activeTeam ? activeTeam.name : activeCode;
     }
 
     // ---- UI Refresh ----
@@ -434,6 +659,12 @@ var LaxSync = (function () {
         console.error('[LaxSync] Firestore write failed:', err);
     }
 
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
     // ---- Auto-init on DOMContentLoaded ----
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
@@ -447,6 +678,10 @@ var LaxSync = (function () {
         joinTeam: joinTeam,
         leaveTeam: leaveTeam,
         copyTeamCode: copyTeamCode,
-        loadTeamUI: loadTeamUI
+        switchTeam: switchTeam,
+        loadTeamUI: loadTeamUI,
+        getActiveTeam: getActiveTeam,
+        getUserTeams: getUserTeams,
+        updateActiveTeamDisplay: updateActiveTeamDisplay
     };
 })();

@@ -14,14 +14,74 @@ let selectedStat = null;
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {
+    // Wait for Firebase auth before loading data
+    window.firebaseReady.then(function (user) {
+        if (user) {
+            // User is signed in — show main app
+            showSignedInState(user);
+        } else {
+            // No user — stay on sign-in screen (already active in HTML)
+            console.log('[App] Waiting for sign-in');
+        }
+    });
+});
+
+// Called by firebase-config.js when user signs in (after initial load)
+function onAuthSignIn(user) {
+    showSignedInState(user);
+    // Re-init sync layer for the new user
+    LaxSync.init();
+}
+
+// Called by firebase-config.js when user signs out
+function onAuthSignOut() {
+    // Hide all screens, show sign-in
+    document.querySelectorAll('.screen').forEach(screen => {
+        screen.classList.remove('active');
+    });
+    document.getElementById('signin-screen').classList.add('active');
+}
+
+function showSignedInState(user) {
+    // Hide sign-in, show home
+    document.querySelectorAll('.screen').forEach(screen => {
+        screen.classList.remove('active');
+    });
+    document.getElementById('home-screen').classList.add('active');
+
+    // Load app data
     loadTeamName();
     loadRoster();
     loadScheduledGames();
     loadGameHistory();
-});
+
+    // Populate account section
+    updateAccountUI(user);
+}
+
+function updateAccountUI(user) {
+    var nameEl = document.getElementById('account-name');
+    var emailEl = document.getElementById('account-email');
+    var avatarEl = document.getElementById('account-avatar');
+
+    if (nameEl) nameEl.textContent = user.displayName || 'User';
+    if (emailEl) emailEl.textContent = user.email || '';
+    if (avatarEl) {
+        if (user.photoURL) {
+            avatarEl.innerHTML = '<img src="' + user.photoURL + '" alt="avatar" referrerpolicy="no-referrer">';
+        } else {
+            avatarEl.textContent = (user.displayName || 'U').charAt(0).toUpperCase();
+        }
+    }
+}
 
 // ===== SCREEN NAVIGATION =====
 function showScreen(screenId) {
+    // Don't allow navigating away from sign-in if not authenticated
+    if (!firebase.auth().currentUser && screenId !== 'signin-screen') {
+        return;
+    }
+
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.remove('active');
     });
@@ -1128,6 +1188,15 @@ function loadSeasonSummary() {
 function loadSettings() {
     const teamName = localStorage.getItem(STORAGE_KEYS.TEAM_NAME) || '';
     document.getElementById('team-name').value = teamName;
+
+    // Refresh account UI if user is signed in
+    var user = firebase.auth().currentUser;
+    if (user) updateAccountUI(user);
+
+    // Refresh team list
+    if (typeof LaxSync !== 'undefined' && LaxSync.loadTeamUI) {
+        LaxSync.loadTeamUI();
+    }
 }
 
 function saveTeamName() {
@@ -1793,14 +1862,17 @@ function undoLastVoiceStat() {
     setTimeout(hideVoiceFeedback, 1500);
 }
 
-// Check for ongoing game on load
+// Check for ongoing game on load (only after auth)
 window.addEventListener('load', () => {
-    const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_GAME);
-    if (saved) {
-        if (confirm('You have a game in progress. Continue?')) {
-            currentGame = JSON.parse(saved);
-            loadGameScreen();
-            showScreen('game-screen');
+    window.firebaseReady.then(function (user) {
+        if (!user) return; // Not signed in, skip game resume
+        const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_GAME);
+        if (saved) {
+            if (confirm('You have a game in progress. Continue?')) {
+                currentGame = JSON.parse(saved);
+                loadGameScreen();
+                showScreen('game-screen');
+            }
         }
-    }
+    });
 });

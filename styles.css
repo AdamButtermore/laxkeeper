@@ -940,3 +940,231 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     color: var(--text-secondary);
     margin-top: 0.75rem;
 }
+
+/* ===== SIGN-IN SCREEN ===== */
+
+.signin-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+    text-align: center;
+}
+
+.signin-logo {
+    font-size: 5rem;
+    margin-bottom: 1rem;
+}
+
+.signin-title {
+    font-size: 2.5rem;
+    font-weight: 900;
+    margin-bottom: 0.25rem;
+}
+
+.signin-subtitle {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    margin-bottom: 3rem;
+}
+
+.google-signin-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    width: 100%;
+    max-width: 320px;
+    padding: 1rem 1.5rem;
+    background: #FFFFFF;
+    color: #333333;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    box-shadow: var(--shadow);
+}
+
+.google-signin-btn:active {
+    transform: scale(0.96);
+    box-shadow: 0 2px 8px rgba(255, 255, 255, 0.3);
+}
+
+.google-signin-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.signin-note {
+    max-width: 300px;
+    margin-top: 2rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+/* ===== ACCOUNT SECTION ===== */
+
+.account-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--bg-color);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+}
+
+.account-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    flex-shrink: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: white;
+}
+
+.account-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.account-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.account-name {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text-primary);
+}
+
+.account-email {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ===== ACTIVE TEAM BADGE (Home Header) ===== */
+
+.active-team-badge {
+    display: inline-block;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--success-color);
+    letter-spacing: 0.5px;
+}
+
+.active-team-badge:empty {
+    display: none;
+}
+
+/* ===== TEAM LIST / SWITCHER ===== */
+
+.team-list {
+    margin-bottom: 1.5rem;
+}
+
+.team-list-empty {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    text-align: center;
+    padding: 1.5rem 1rem;
+    line-height: 1.5;
+}
+
+.team-list-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--bg-color);
+    border: 3px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.team-list-item:active {
+    transform: scale(0.98);
+}
+
+.team-list-item.active {
+    border-color: var(--success-color);
+    box-shadow: 0 0 0 1px var(--success-color);
+}
+
+.team-list-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.team-list-item-name {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text-primary);
+}
+
+.team-list-item-code {
+    font-size: 0.8rem;
+    font-family: 'Courier New', monospace;
+    color: var(--text-secondary);
+    letter-spacing: 0.15rem;
+}
+
+.team-list-item-active-label {
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--success-color);
+    white-space: nowrap;
+}
+
+.team-list-item-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.team-copy-btn,
+.team-leave-btn {
+    padding: 0.4rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.team-copy-btn {
+    background: var(--primary-color);
+    color: white;
+}
+
+.team-leave-btn {
+    background: transparent;
+    color: var(--danger-color);
+    border: 1px solid var(--danger-color);
+}
+
+.team-actions {
+    margin-top: 1rem;
+}
