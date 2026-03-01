@@ -97,6 +97,12 @@ function showScreen(screenId) {
 }
 
 // ===== ROSTER MANAGEMENT =====
+function logEvent(name, params) {
+    if (typeof firebase !== 'undefined' && firebase.analytics) {
+        firebase.analytics().logEvent(name, params);
+    }
+}
+
 function addPlayer() {
     const name = document.getElementById('player-name').value.trim();
     const number = document.getElementById('player-number').value.trim();
@@ -124,6 +130,7 @@ function addPlayer() {
 
     saveRoster(roster);
     loadRoster();
+    logEvent('add_player', { position });
 
     // Clear form
     document.getElementById('player-name').value = '';
@@ -203,6 +210,7 @@ function scheduleGame() {
 
     saveGames(games);
     loadScheduledGames();
+    logEvent('schedule_game', { format });
 
     // Clear form
     document.getElementById('opponent-name').value = '';
@@ -373,6 +381,7 @@ function initializeGame(game, roster, trackingTeam, trackingTeamName) {
 
     // Save current game
     localStorage.setItem(STORAGE_KEYS.CURRENT_GAME, JSON.stringify(currentGame));
+    logEvent('start_game', { format: game.format });
 
     // Load game screen
     loadGameScreen();
@@ -747,6 +756,7 @@ function endGame() {
         games.push(currentGame);
     }
     saveGames(games);
+    logEvent('end_game', { home_score: currentGame.homeScore, away_score: currentGame.awayScore });
 
     // Clear current game
     localStorage.removeItem(STORAGE_KEYS.CURRENT_GAME);

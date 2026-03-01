@@ -14,6 +14,9 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 
+// Initialize Analytics
+const analytics = firebase.analytics();
+
 // Enable Firestore offline persistence (queues writes when offline)
 const db = firebase.firestore();
 db.enablePersistence({ synchronizeTabs: true }).catch(function (err) {
@@ -66,6 +69,7 @@ function signInWithGoogle() {
 
     firebase.auth().signInWithPopup(googleProvider).then(function (result) {
         console.log('[Firebase] Google sign-in success:', result.user.displayName);
+        firebase.analytics().logEvent('login', { method: 'google' });
         // onAuthStateChanged will fire and handle the rest
     }).catch(function (err) {
         console.error('[Firebase] Google sign-in failed:', err);
