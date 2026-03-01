@@ -549,6 +549,7 @@ function adjustScore(team, amount) {
 // ===== GAME CLOCK =====
 function toggleClock() {
     currentGame.clockPausedForGoal = false;
+    currentGame.clockPausedForTimeout = false;
     if (currentGame.clockRunning) {
         pauseClock();
     } else {
@@ -556,16 +557,18 @@ function toggleClock() {
     }
 }
 
-// Auto-resume clock if it was paused for a goal (stop time)
+// Auto-resume clock if it was paused for a goal or timeout
 function resumeClockIfGoalPaused() {
-    if (currentGame && currentGame.clockPausedForGoal && !currentGame.clockRunning) {
+    if (currentGame && (currentGame.clockPausedForGoal || currentGame.clockPausedForTimeout) && !currentGame.clockRunning) {
         currentGame.clockPausedForGoal = false;
+        currentGame.clockPausedForTimeout = false;
         startClock();
     }
 }
 
 function startClock() {
     currentGame.clockPausedForGoal = false;
+    currentGame.clockPausedForTimeout = false;
     currentGame.clockRunning = true;
     document.getElementById('clock-btn-text').textContent = 'Pause';
     document.getElementById('left-clock-btn-text').textContent = 'PAUSE';
@@ -652,8 +655,9 @@ function callTimeout(team) {
     // Pause the clock
     if (currentGame.clockRunning) {
         pauseClock();
+        currentGame.clockPausedForTimeout = true;
     }
-    currentGame.clockPausedForGoal = false; // don't auto-resume after timeout
+    currentGame.clockPausedForGoal = false; // timeout overrides goal pause
 
     saveCurrentGame();
     updateTimeoutDisplay();
