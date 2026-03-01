@@ -65,13 +65,8 @@ function signInWithGoogle() {
     }
 
     firebase.auth().signInWithPopup(googleProvider).then(function (result) {
-        var user = result.user;
-        console.log('[Firebase] Google sign-in success:', user.displayName);
-        syncUserProfile(user);
-
-        // Re-resolve for any code waiting on firebaseReady after sign-in
-        window.firebaseUser = user;
-        if (typeof onAuthSignIn === 'function') onAuthSignIn(user);
+        console.log('[Firebase] Google sign-in success:', result.user.displayName);
+        // onAuthStateChanged will fire and handle the rest
     }).catch(function (err) {
         console.error('[Firebase] Google sign-in failed:', err);
         if (btn) {

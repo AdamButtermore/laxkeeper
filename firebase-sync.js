@@ -32,8 +32,12 @@ var LaxSync = (function () {
     var suppressSync = false;
 
     // ---- Init ----
-    function init() {
-        window.firebaseReady.then(function (user) {
+    function init(passedUser) {
+        var startup = passedUser
+            ? Promise.resolve(passedUser)
+            : window.firebaseReady;
+
+        startup.then(function (user) {
             if (!user) {
                 console.warn('[LaxSync] No auth user, sync disabled');
                 loadTeamUI();

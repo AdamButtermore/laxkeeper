@@ -29,8 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // Called by firebase-config.js when user signs in (after initial load)
 function onAuthSignIn(user) {
     showSignedInState(user);
-    // Re-init sync layer for the new user
-    LaxSync.init();
+    // Re-init sync layer with the authenticated user
+    LaxSync.init(user);
 }
 
 // Called by firebase-config.js when user signs out
