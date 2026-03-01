@@ -1344,21 +1344,21 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 .about-hero {
     text-align: center;
-    padding: 2.5rem 1rem 2rem;
+    padding: 1rem 1rem 0.75rem;
 }
 
 .about-hero h1 {
-    font-size: 2.5rem;
+    font-size: 1.8rem;
     font-weight: 900;
     background: linear-gradient(135deg, var(--primary-color), #00C853);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
 }
 
 .about-tagline {
-    font-size: 1.1rem;
+    font-size: 0.95rem;
     color: var(--text-secondary);
     font-weight: 400;
 }
