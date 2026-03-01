@@ -445,6 +445,10 @@ function nextPeriod() {
         return;
     }
 
+    const periodLabel = currentGame.format === 'quarters' ? 'Quarter' : 'Half';
+    const nextNum = currentGame.currentPeriod + 1;
+    if (!confirm(`Advance to ${periodLabel} ${nextNum}? This will reset the clock.`)) return;
+
     pauseClock();
     currentGame.currentPeriod++;
     currentGame.timeRemaining = currentGame.periodDuration * 60;
@@ -833,9 +837,26 @@ function loadGameHistory() {
                     ${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                 </p>
                 <button class="btn-secondary" onclick="viewGameStats('${game.id}')">View Stats</button>
+                <button class="btn-danger" onclick="deleteGame('${game.id}')" style="margin-top: 0.5rem;">Delete Game</button>
             </div>
         `;
     }).join('');
+}
+
+function deleteGame(gameId) {
+    const games = getGames();
+    const game = games.find(g => g.id === gameId);
+    if (!game) return;
+
+    const label = `vs ${game.opponent} (${game.homeScore}-${game.awayScore})`;
+
+    if (!confirm(`Delete the game ${label}?\n\nThis will permanently remove all stats from this game.`)) return;
+    if (!confirm(`Are you REALLY sure?\n\nAll player stats for ${label} will be gone forever.`)) return;
+    if (!confirm(`Last chance! Type-level serious.\n\nDeleting ${label} — this CANNOT be undone. Proceed?`)) return;
+
+    const updated = games.filter(g => g.id !== gameId);
+    saveGames(updated);
+    loadGameHistory();
 }
 
 function viewGameStats(gameId) {
