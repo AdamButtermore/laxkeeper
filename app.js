@@ -1046,9 +1046,11 @@ function viewGameStats(gameId) {
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Assists</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Points</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Shots</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Shot %</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Ground Balls</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Faceoff Wins</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Faceoff Losses</th>
+                        <th style="padding: 0.5rem; text-align: center; font-weight: 700;">FO Win %</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Turnovers</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Takeaways</th>
                         <th style="padding: 0.5rem; text-align: center; font-weight: 700;">Saves</th>
@@ -1076,9 +1078,11 @@ function viewGameStats(gameId) {
                 <td style="padding: 0.5rem; text-align: center;">${assists}</td>
                 <td style="padding: 0.5rem; text-align: center; font-weight: 600;">${points}</td>
                 <td style="padding: 0.5rem; text-align: center;">${stats.shot || 0}</td>
+                <td style="padding: 0.5rem; text-align: center;">${(stats.shot || 0) > 0 ? Math.round(goals / (stats.shot || 1) * 100) + '%' : '-'}</td>
                 <td style="padding: 0.5rem; text-align: center;">${stats['ground-ball'] || 0}</td>
                 <td style="padding: 0.5rem; text-align: center;">${stats['faceoff-won'] || 0}</td>
                 <td style="padding: 0.5rem; text-align: center;">${stats['faceoff-lost'] || 0}</td>
+                <td style="padding: 0.5rem; text-align: center;">${((stats['faceoff-won'] || 0) + (stats['faceoff-lost'] || 0)) > 0 ? Math.round((stats['faceoff-won'] || 0) / ((stats['faceoff-won'] || 0) + (stats['faceoff-lost'] || 0)) * 100) + '%' : '-'}</td>
                 <td style="padding: 0.5rem; text-align: center;">${stats.turnover || 0}</td>
                 <td style="padding: 0.5rem; text-align: center;">${stats['caused-turnover'] || 0}</td>
                 <td style="padding: 0.5rem; text-align: center;">${stats.save || 0}</td>
@@ -1087,7 +1091,7 @@ function viewGameStats(gameId) {
     });
 
     if (!hasStats) {
-        statsHtml += `<tr><td colspan="12" style="padding: 1rem; text-align: center; color: #64748b; font-style: italic;">No stats recorded</td></tr>`;
+        statsHtml += `<tr><td colspan="14" style="padding: 1rem; text-align: center; color: #64748b; font-style: italic;">No stats recorded</td></tr>`;
     }
 
     statsHtml += `</tbody></table></div>`;
@@ -1203,9 +1207,11 @@ function loadSeasonSummary() {
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">A</th>
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Pts</th>
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Sh</th>
+                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Sh%</th>
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">GB</th>
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">FOW</th>
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">FOL</th>
+                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">FO%</th>
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">TO</th>
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">TA</th>
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Sv</th>
@@ -1223,9 +1229,11 @@ function loadSeasonSummary() {
                 <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalAssists}</td>
                 <td style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700; color: var(--success-color);">${stats.totalPoints}</td>
                 <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalShots}</td>
+                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalShots > 0 ? Math.round(stats.totalGoals / stats.totalShots * 100) + '%' : '-'}</td>
                 <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalGroundBalls}</td>
                 <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalFaceoffWon}</td>
                 <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalFaceoffLost}</td>
+                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${(stats.totalFaceoffWon + stats.totalFaceoffLost) > 0 ? Math.round(stats.totalFaceoffWon / (stats.totalFaceoffWon + stats.totalFaceoffLost) * 100) + '%' : '-'}</td>
                 <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalTurnovers}</td>
                 <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalCausedTurnovers}</td>
                 <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalSaves}</td>
@@ -1251,6 +1259,8 @@ function loadSeasonSummary() {
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Pts/G</th>
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">GB/G</th>
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Sh/G</th>
+                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Sh%</th>
+                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">FO%</th>
                         <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Sv/G</th>
                     </tr>
                 </thead>
@@ -1274,6 +1284,8 @@ function loadSeasonSummary() {
                 <td style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700; color: var(--success-color);">${pointsPerGame}</td>
                 <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${gbPerGame}</td>
                 <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${shotsPerGame}</td>
+                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalShots > 0 ? Math.round(stats.totalGoals / stats.totalShots * 100) + '%' : '-'}</td>
+                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${(stats.totalFaceoffWon + stats.totalFaceoffLost) > 0 ? Math.round(stats.totalFaceoffWon / (stats.totalFaceoffWon + stats.totalFaceoffLost) * 100) + '%' : '-'}</td>
                 <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${savesPerGame}</td>
             </tr>`;
     });
