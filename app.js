@@ -1561,185 +1561,318 @@ function loadSeasonSummary() {
         return;
     }
 
-    // Calculate per-player season stats
+    // Sort games chronologically
+    const sortedGames = [...games].sort((a, b) => new Date(a.completedAt || a.datetime) - new Date(b.completedAt || b.datetime));
+
+    // Helper: aggregate all player stats for a single game into team totals
+    function getTeamGameStats(game) {
+        const t = { g: 0, a: 0, pts: 0, sh: 0, gb: 0, fow: 0, fol: 0, to: 0, ta: 0, sv: 0, pen: 0 };
+        if (!game.stats) return t;
+        Object.values(game.stats).forEach(ps => {
+            t.g += getStatCount(ps.goal);
+            t.a += getStatCount(ps.assist);
+            t.sh += getStatCount(ps.shot);
+            t.gb += getStatCount(ps['ground-ball']);
+            t.fow += getStatCount(ps['faceoff-won']);
+            t.fol += getStatCount(ps['faceoff-lost']);
+            t.to += getStatCount(ps.turnover);
+            t.ta += getStatCount(ps['caused-turnover']);
+            t.sv += getStatCount(ps.save);
+            t.pen += getStatCount(ps.penalty);
+        });
+        t.pts = t.g + t.a;
+        return t;
+    }
+
+    // Helper: get a single player's stats for a single game
+    function getPlayerGameStats(game, playerId) {
+        const ps = game.stats && game.stats[playerId];
+        if (!ps) return null;
+        const g = getStatCount(ps.goal);
+        const a = getStatCount(ps.assist);
+        const sh = getStatCount(ps.shot);
+        const fow = getStatCount(ps['faceoff-won']);
+        const fol = getStatCount(ps['faceoff-lost']);
+        return {
+            g, a, pts: g + a, sh,
+            gb: getStatCount(ps['ground-ball']), fow, fol,
+            to: getStatCount(ps.turnover), ta: getStatCount(ps['caused-turnover']),
+            sv: getStatCount(ps.save), pen: getStatCount(ps.penalty)
+        };
+    }
+
+    // Common table header style
+    const thStyle = 'padding: 0.6rem 0.5rem; text-align: center; font-weight: 700;';
+    const tdStyle = 'padding: 0.6rem 0.5rem; text-align: center; color: var(--text-primary);';
+    const stickyTh = thStyle + ' text-align: left; position: sticky; left: 0; z-index: 1;';
+    const stickyTd = 'padding: 0.6rem 0.5rem; font-weight: 600; color: var(--text-primary); position: sticky; left: 0; z-index: 1; background: var(--card-bg); white-space: nowrap;';
+
+    // Build stat header columns (reusable)
+    function statHeaders(headerBg) {
+        return `<th style="${stickyTh} background: ${headerBg};">Game</th>
+            <th style="${thStyle}">Score</th>
+            <th style="${thStyle}">G</th><th style="${thStyle}">A</th><th style="${thStyle}">Pts</th>
+            <th style="${thStyle}">Sh</th><th style="${thStyle}">Sh%</th>
+            <th style="${thStyle}">GB</th><th style="${thStyle}">FOW</th><th style="${thStyle}">FOL</th><th style="${thStyle}">FO%</th>
+            <th style="${thStyle}">TO</th><th style="${thStyle}">TA</th><th style="${thStyle}">Sv</th><th style="${thStyle}">Pen</th>`;
+    }
+
+    // Build a stat row from a stats object
+    function statRow(label, score, s, bg) {
+        const shPct = s.sh > 0 ? Math.round(s.g / s.sh * 100) + '%' : '-';
+        const foPct = (s.fow + s.fol) > 0 ? Math.round(s.fow / (s.fow + s.fol) * 100) + '%' : '-';
+        return `<tr style="border-bottom: 1px solid var(--border-color); ${bg ? 'background:' + bg + ';' : ''}">
+            <td style="${stickyTd} ${bg ? 'background:' + bg + ';' : ''}">${label}</td>
+            <td style="${tdStyle} font-weight: 600;">${score}</td>
+            <td style="${tdStyle}">${s.g}</td><td style="${tdStyle}">${s.a}</td><td style="${tdStyle} font-weight: 700;">${s.pts}</td>
+            <td style="${tdStyle}">${s.sh}</td><td style="${tdStyle}">${shPct}</td>
+            <td style="${tdStyle}">${s.gb}</td><td style="${tdStyle}">${s.fow}</td><td style="${tdStyle}">${s.fol}</td><td style="${tdStyle}">${foPct}</td>
+            <td style="${tdStyle}">${s.to}</td><td style="${tdStyle}">${s.ta}</td><td style="${tdStyle}">${s.sv}</td><td style="${tdStyle}">${s.pen}</td>
+        </tr>`;
+    }
+
+    let html = '<div style="padding: 0.5rem; max-width: 1200px; margin: 0 auto;">';
+
+    // ========== 1. TEAM GAME-BY-GAME ==========
+    html += `<div style="background: var(--card-bg); padding: 1.25rem; border-radius: 12px; margin-bottom: 1.5rem; border: 2px solid var(--primary-color);">`;
+    html += `<h3 style="margin-bottom: 1rem; color: var(--text-primary);">Team Stats by Game</h3>`;
+    html += `<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">`;
+    html += `<thead><tr style="background: var(--primary-color); color: white;">${statHeaders('var(--primary-color)')}</tr></thead><tbody>`;
+
+    // Team totals accumulator
+    const teamTotals = { g: 0, a: 0, pts: 0, sh: 0, gb: 0, fow: 0, fol: 0, to: 0, ta: 0, sv: 0, pen: 0 };
+
+    sortedGames.forEach((game, i) => {
+        const t = getTeamGameStats(game);
+        Object.keys(teamTotals).forEach(k => teamTotals[k] += t[k]);
+        const date = new Date(game.completedAt || game.datetime);
+        const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        const result = game.homeScore > game.awayScore ? 'W' : game.homeScore < game.awayScore ? 'L' : 'T';
+        const resultColor = result === 'W' ? '#10b981' : result === 'L' ? '#ef4444' : '#94a3b8';
+        const label = `<span style="color: ${resultColor}; font-weight: 700;">${result}</span> vs ${game.opponent}<br><span style="font-size: 0.75rem; color: var(--text-secondary);">${dateStr}</span>`;
+        const score = `<span style="color: ${resultColor};">${game.homeScore}-${game.awayScore}</span>`;
+        const bg = i % 2 === 0 ? '' : 'rgba(255,255,255,0.02)';
+        html += statRow(label, score, t, bg);
+    });
+
+    // Totals row
+    const totalShPct = teamTotals.sh > 0 ? Math.round(teamTotals.g / teamTotals.sh * 100) + '%' : '-';
+    const totalFoPct = (teamTotals.fow + teamTotals.fol) > 0 ? Math.round(teamTotals.fow / (teamTotals.fow + teamTotals.fol) * 100) + '%' : '-';
+    html += `<tr style="border-top: 3px solid var(--primary-color); font-weight: 700;">
+        <td style="${stickyTd} background: var(--card-bg);">Season Totals</td>
+        <td style="${tdStyle}">${sortedGames.length} GP</td>
+        <td style="${tdStyle}">${teamTotals.g}</td><td style="${tdStyle}">${teamTotals.a}</td><td style="${tdStyle}">${teamTotals.pts}</td>
+        <td style="${tdStyle}">${teamTotals.sh}</td><td style="${tdStyle}">${totalShPct}</td>
+        <td style="${tdStyle}">${teamTotals.gb}</td><td style="${tdStyle}">${teamTotals.fow}</td><td style="${tdStyle}">${teamTotals.fol}</td><td style="${tdStyle}">${totalFoPct}</td>
+        <td style="${tdStyle}">${teamTotals.to}</td><td style="${tdStyle}">${teamTotals.ta}</td><td style="${tdStyle}">${teamTotals.sv}</td><td style="${tdStyle}">${teamTotals.pen}</td>
+    </tr>`;
+
+    html += `</tbody></table></div></div>`;
+
+    // ========== Calculate per-player season stats ==========
     const seasonStats = {};
     roster.forEach(player => {
         seasonStats[player.id] = {
-            player: player,
-            gamesPlayed: 0,
-            totalGoals: 0,
-            totalAssists: 0,
-            totalPoints: 0,
-            totalShots: 0,
-            totalGroundBalls: 0,
-            totalFaceoffWon: 0,
-            totalFaceoffLost: 0,
-            totalTurnovers: 0,
-            totalCausedTurnovers: 0,
-            totalSaves: 0,
-            totalPenalties: 0
+            player, gamesPlayed: 0,
+            totalGoals: 0, totalAssists: 0, totalPoints: 0, totalShots: 0,
+            totalGroundBalls: 0, totalFaceoffWon: 0, totalFaceoffLost: 0,
+            totalTurnovers: 0, totalCausedTurnovers: 0, totalSaves: 0, totalPenalties: 0
         };
     });
 
-    // Aggregate stats from all games
     games.forEach(game => {
         if (!game.stats) return;
-
         Object.keys(game.stats).forEach(playerId => {
             if (!seasonStats[playerId]) return;
-
-            const playerGameStats = game.stats[playerId];
-            const playerSeasonStats = seasonStats[playerId];
-
-            // Player was on the roster when this game was played
-            playerSeasonStats.gamesPlayed++;
-
-            playerSeasonStats.totalGoals += getStatCount(playerGameStats.goal);
-            playerSeasonStats.totalAssists += getStatCount(playerGameStats.assist);
-            playerSeasonStats.totalShots += getStatCount(playerGameStats.shot);
-            playerSeasonStats.totalGroundBalls += getStatCount(playerGameStats['ground-ball']);
-            playerSeasonStats.totalFaceoffWon += getStatCount(playerGameStats['faceoff-won']);
-            playerSeasonStats.totalFaceoffLost += getStatCount(playerGameStats['faceoff-lost']);
-            playerSeasonStats.totalTurnovers += getStatCount(playerGameStats.turnover);
-            playerSeasonStats.totalCausedTurnovers += getStatCount(playerGameStats['caused-turnover']);
-            playerSeasonStats.totalSaves += getStatCount(playerGameStats.save);
-            playerSeasonStats.totalPenalties += getStatCount(playerGameStats.penalty);
+            const ps = game.stats[playerId];
+            const ss = seasonStats[playerId];
+            ss.gamesPlayed++;
+            ss.totalGoals += getStatCount(ps.goal);
+            ss.totalAssists += getStatCount(ps.assist);
+            ss.totalShots += getStatCount(ps.shot);
+            ss.totalGroundBalls += getStatCount(ps['ground-ball']);
+            ss.totalFaceoffWon += getStatCount(ps['faceoff-won']);
+            ss.totalFaceoffLost += getStatCount(ps['faceoff-lost']);
+            ss.totalTurnovers += getStatCount(ps.turnover);
+            ss.totalCausedTurnovers += getStatCount(ps['caused-turnover']);
+            ss.totalSaves += getStatCount(ps.save);
+            ss.totalPenalties += getStatCount(ps.penalty);
         });
     });
 
-    // Calculate totals and averages
-    Object.values(seasonStats).forEach(stats => {
-        stats.totalPoints = stats.totalGoals + stats.totalAssists;
-    });
+    Object.values(seasonStats).forEach(s => { s.totalPoints = s.totalGoals + s.totalAssists; });
 
-    // Sort by jersey number ascending
     const sortedPlayers = Object.values(seasonStats)
         .filter(s => s.gamesPlayed > 0)
         .sort((a, b) => Number(a.player.number) - Number(b.player.number));
 
-    let html = '<div style="padding: 0.5rem;">';
-
-    // Season Overview
-    html += `<div style="background: var(--card-bg); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; border: 2px solid var(--primary-color);">`;
-    html += `<h3 style="margin-bottom: 0.5rem; color: var(--text-primary);">Season Overview</h3>`;
-    html += `<p style="color: var(--text-secondary); font-size: 1rem;">Total Games: <strong>${games.length}</strong></p>`;
-    html += `</div>`;
-
-    // Individual Player Stats - Full Table
-    html += `<div style="background: var(--card-bg); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; border: 2px solid var(--primary-color);">`;
+    // ========== 2. INDIVIDUAL PLAYER TOTALS ==========
+    html += `<div style="background: var(--card-bg); padding: 1.25rem; border-radius: 12px; margin-bottom: 1.5rem; border: 2px solid var(--primary-color);">`;
     html += `<h3 style="margin-bottom: 1rem; color: var(--text-primary);">Individual Player Stats</h3>`;
+    html += `<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">`;
+    html += `<thead><tr style="background: var(--primary-color); color: white;">
+        <th style="${stickyTh} background: var(--primary-color);">Player</th>
+        <th style="${thStyle}">GP</th><th style="${thStyle}">G</th><th style="${thStyle}">A</th><th style="${thStyle}">Pts</th>
+        <th style="${thStyle}">Sh</th><th style="${thStyle}">Sh%</th><th style="${thStyle}">GB</th>
+        <th style="${thStyle}">FOW</th><th style="${thStyle}">FOL</th><th style="${thStyle}">FO%</th>
+        <th style="${thStyle}">TO</th><th style="${thStyle}">TA</th><th style="${thStyle}">Sv</th><th style="${thStyle}">Pen</th>
+    </tr></thead><tbody>`;
 
-    html += `
-        <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
-                <thead>
-                    <tr style="background: var(--primary-color); color: white; border-bottom: 3px solid var(--primary-color);">
-                        <th style="padding: 0.6rem 0.4rem; text-align: left; font-weight: 700; position: sticky; left: 0; background: var(--primary-color);">Player</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">GP</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">G</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">A</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Pts</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Sh</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Sh%</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">GB</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">FOW</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">FOL</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">FO%</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">TO</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">TA</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Sv</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Pen</th>
-                    </tr>
-                </thead>
-                <tbody>`;
-
-    // Find column maximums for green highlighting
-    const seasonColKeys = ['totalGoals','totalAssists','totalPoints','totalShots','seasonShPct','totalGroundBalls','totalFaceoffWon','totalFaceoffLost','seasonFoPct','totalCausedTurnovers','totalSaves'];
-    const seasonMax = {};
+    // Green highlighting
+    const colKeys = ['totalGoals','totalAssists','totalPoints','totalShots','shPct','totalGroundBalls','totalFaceoffWon','seasonFoPct','totalCausedTurnovers','totalSaves'];
     sortedPlayers.forEach(s => {
-        s.seasonShPct = s.totalShots > 0 ? Math.round(s.totalGoals / s.totalShots * 100) : -1;
+        s.shPct = s.totalShots > 0 ? Math.round(s.totalGoals / s.totalShots * 100) : -1;
         s.seasonFoPct = (s.totalFaceoffWon + s.totalFaceoffLost) > 0 ? Math.round(s.totalFaceoffWon / (s.totalFaceoffWon + s.totalFaceoffLost) * 100) : -1;
     });
-    seasonColKeys.forEach(k => {
+    const colMax = {};
+    colKeys.forEach(k => {
         const vals = sortedPlayers.map(s => s[k]).filter(v => v > 0);
-        seasonMax[k] = vals.length > 0 ? Math.max(...vals) : -1;
+        colMax[k] = vals.length > 0 ? Math.max(...vals) : -1;
     });
-    const sGrn = (val, key) => val > 0 && val === seasonMax[key] ? 'color: #16a34a; font-weight: 700;' : 'color: var(--text-primary);';
+    const grn = (val, key) => val > 0 && val === colMax[key] ? 'color: #16a34a; font-weight: 700;' : 'color: var(--text-primary);';
 
-    sortedPlayers.forEach(stats => {
-        html += `
-            <tr style="border-bottom: 1px solid var(--border-color);">
-                <td style="padding: 0.6rem 0.4rem; font-weight: 600; color: var(--text-primary); position: sticky; left: 0; background: var(--card-bg);">#${stats.player.number} ${stats.player.name}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.gamesPlayed}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalGoals,'totalGoals')}">${stats.totalGoals}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalAssists,'totalAssists')}">${stats.totalAssists}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalPoints,'totalPoints')}">${stats.totalPoints}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalShots,'totalShots')}">${stats.totalShots}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.seasonShPct,'seasonShPct')}">${stats.seasonShPct >= 0 ? stats.seasonShPct + '%' : '-'}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalGroundBalls,'totalGroundBalls')}">${stats.totalGroundBalls}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalFaceoffWon,'totalFaceoffWon')}">${stats.totalFaceoffWon}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalFaceoffLost,'totalFaceoffLost')}">${stats.totalFaceoffLost}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.seasonFoPct,'seasonFoPct')}">${stats.seasonFoPct >= 0 ? stats.seasonFoPct + '%' : '-'}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalTurnovers}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalCausedTurnovers,'totalCausedTurnovers')}">${stats.totalCausedTurnovers}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; ${sGrn(stats.totalSaves,'totalSaves')}">${stats.totalSaves}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalPenalties}</td>
-            </tr>`;
+    sortedPlayers.forEach((s, i) => {
+        const bg = i % 2 === 0 ? '' : 'background: rgba(255,255,255,0.02);';
+        html += `<tr style="border-bottom: 1px solid var(--border-color); ${bg}">
+            <td style="${stickyTd} ${bg}">#${s.player.number} ${s.player.name}</td>
+            <td style="${tdStyle}">${s.gamesPlayed}</td>
+            <td style="${tdStyle} ${grn(s.totalGoals,'totalGoals')}">${s.totalGoals}</td>
+            <td style="${tdStyle} ${grn(s.totalAssists,'totalAssists')}">${s.totalAssists}</td>
+            <td style="${tdStyle} font-weight: 700; ${grn(s.totalPoints,'totalPoints')}">${s.totalPoints}</td>
+            <td style="${tdStyle} ${grn(s.totalShots,'totalShots')}">${s.totalShots}</td>
+            <td style="${tdStyle} ${grn(s.shPct,'shPct')}">${s.shPct >= 0 ? s.shPct + '%' : '-'}</td>
+            <td style="${tdStyle} ${grn(s.totalGroundBalls,'totalGroundBalls')}">${s.totalGroundBalls}</td>
+            <td style="${tdStyle} ${grn(s.totalFaceoffWon,'totalFaceoffWon')}">${s.totalFaceoffWon}</td>
+            <td style="${tdStyle}">${s.totalFaceoffLost}</td>
+            <td style="${tdStyle} ${grn(s.seasonFoPct,'seasonFoPct')}">${s.seasonFoPct >= 0 ? s.seasonFoPct + '%' : '-'}</td>
+            <td style="${tdStyle}">${s.totalTurnovers}</td>
+            <td style="${tdStyle} ${grn(s.totalCausedTurnovers,'totalCausedTurnovers')}">${s.totalCausedTurnovers}</td>
+            <td style="${tdStyle} ${grn(s.totalSaves,'totalSaves')}">${s.totalSaves}</td>
+            <td style="${tdStyle}">${s.totalPenalties}</td>
+        </tr>`;
     });
 
     html += `</tbody></table></div></div>`;
 
-    // Per-Game Averages Table
-    html += `<div style="background: var(--card-bg); padding: 1rem; border-radius: 8px; border: 2px solid var(--success-color);">`;
+    // ========== 3. PER-GAME AVERAGES ==========
+    html += `<div style="background: var(--card-bg); padding: 1.25rem; border-radius: 12px; margin-bottom: 1.5rem; border: 2px solid var(--success-color);">`;
     html += `<h3 style="margin-bottom: 1rem; color: var(--text-primary);">Per-Game Averages</h3>`;
+    html += `<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">`;
+    html += `<thead><tr style="background: var(--success-color); color: white;">
+        <th style="${stickyTh} background: var(--success-color);">Player</th>
+        <th style="${thStyle}">GP</th><th style="${thStyle}">G/G</th><th style="${thStyle}">A/G</th><th style="${thStyle}">Pts/G</th>
+        <th style="${thStyle}">Sh/G</th><th style="${thStyle}">Sh%</th><th style="${thStyle}">GB/G</th>
+        <th style="${thStyle}">FO%</th><th style="${thStyle}">Sv/G</th>
+    </tr></thead><tbody>`;
 
-    html += `
-        <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
-                <thead>
-                    <tr style="background: var(--success-color); color: white; border-bottom: 3px solid var(--success-color);">
-                        <th style="padding: 0.6rem 0.4rem; text-align: left; font-weight: 700; position: sticky; left: 0; background: var(--success-color);">Player</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">GP</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">G/G</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">A/G</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Pts/G</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">GB/G</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Sh/G</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Sh%</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">FO%</th>
-                        <th style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700;">Sv/G</th>
-                    </tr>
-                </thead>
-                <tbody>`;
-
-    sortedPlayers.forEach(stats => {
-        const gp = stats.gamesPlayed;
-        const goalsPerGame = gp > 0 ? (stats.totalGoals / gp).toFixed(1) : '0.0';
-        const assistsPerGame = gp > 0 ? (stats.totalAssists / gp).toFixed(1) : '0.0';
-        const pointsPerGame = gp > 0 ? (stats.totalPoints / gp).toFixed(1) : '0.0';
-        const gbPerGame = gp > 0 ? (stats.totalGroundBalls / gp).toFixed(1) : '0.0';
-        const shotsPerGame = gp > 0 ? (stats.totalShots / gp).toFixed(1) : '0.0';
-        const savesPerGame = gp > 0 ? (stats.totalSaves / gp).toFixed(1) : '0.0';
-
-        html += `
-            <tr style="border-bottom: 1px solid var(--border-color);">
-                <td style="padding: 0.6rem 0.4rem; font-weight: 600; color: var(--text-primary); position: sticky; left: 0; background: var(--card-bg);">#${stats.player.number} ${stats.player.name}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${gp}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${goalsPerGame}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${assistsPerGame}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; font-weight: 700; color: var(--success-color);">${pointsPerGame}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${gbPerGame}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${shotsPerGame}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${stats.totalShots > 0 ? Math.round(stats.totalGoals / stats.totalShots * 100) + '%' : '-'}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${(stats.totalFaceoffWon + stats.totalFaceoffLost) > 0 ? Math.round(stats.totalFaceoffWon / (stats.totalFaceoffWon + stats.totalFaceoffLost) * 100) + '%' : '-'}</td>
-                <td style="padding: 0.6rem 0.4rem; text-align: center; color: var(--text-primary);">${savesPerGame}</td>
-            </tr>`;
+    sortedPlayers.forEach((s, i) => {
+        const gp = s.gamesPlayed;
+        const avg = (v) => gp > 0 ? (v / gp).toFixed(1) : '0.0';
+        const bg = i % 2 === 0 ? '' : 'background: rgba(255,255,255,0.02);';
+        html += `<tr style="border-bottom: 1px solid var(--border-color); ${bg}">
+            <td style="${stickyTd} ${bg}">#${s.player.number} ${s.player.name}</td>
+            <td style="${tdStyle}">${gp}</td>
+            <td style="${tdStyle}">${avg(s.totalGoals)}</td>
+            <td style="${tdStyle}">${avg(s.totalAssists)}</td>
+            <td style="${tdStyle} font-weight: 700; color: var(--success-color);">${avg(s.totalPoints)}</td>
+            <td style="${tdStyle}">${avg(s.totalShots)}</td>
+            <td style="${tdStyle}">${s.shPct >= 0 ? s.shPct + '%' : '-'}</td>
+            <td style="${tdStyle}">${avg(s.totalGroundBalls)}</td>
+            <td style="${tdStyle}">${s.seasonFoPct >= 0 ? s.seasonFoPct + '%' : '-'}</td>
+            <td style="${tdStyle}">${avg(s.totalSaves)}</td>
+        </tr>`;
     });
 
     html += `</tbody></table></div></div>`;
-    html += '</div>';
 
+    // ========== 4. PLAYER GAME-BY-GAME DROPDOWN ==========
+    html += `<div style="background: var(--card-bg); padding: 1.25rem; border-radius: 12px; margin-bottom: 1.5rem; border: 2px solid var(--warning-color);">`;
+    html += `<h3 style="margin-bottom: 1rem; color: var(--text-primary);">Player Game Log</h3>`;
+    html += `<select id="player-gamelog-select" onchange="renderPlayerGameLog()" style="width: 100%; padding: 0.75rem; font-size: 1rem; border-radius: 8px; border: 2px solid var(--border-color); background: var(--bg-color); color: var(--text-primary); margin-bottom: 1rem; cursor: pointer;">`;
+    html += `<option value="">Select a player...</option>`;
+    sortedPlayers.forEach(s => {
+        html += `<option value="${s.player.id}">#${s.player.number} ${s.player.name}</option>`;
+    });
+    html += `</select>`;
+    html += `<div id="player-gamelog-table"></div>`;
+    html += `</div>`;
+
+    html += '</div>';
     display.innerHTML = html;
+}
+
+function renderPlayerGameLog() {
+    const playerId = document.getElementById('player-gamelog-select').value;
+    const container = document.getElementById('player-gamelog-table');
+    if (!playerId) { container.innerHTML = ''; return; }
+
+    const games = getGames().filter(g => g.status === 'completed');
+    const sortedGames = [...games].sort((a, b) => new Date(a.completedAt || a.datetime) - new Date(b.completedAt || b.datetime));
+    const roster = getRoster();
+    const player = roster.find(p => p.id === playerId);
+    if (!player) { container.innerHTML = ''; return; }
+
+    const thStyle = 'padding: 0.6rem 0.5rem; text-align: center; font-weight: 700;';
+    const tdStyle = 'padding: 0.6rem 0.5rem; text-align: center; color: var(--text-primary);';
+    const stickyTh = thStyle + ' text-align: left; position: sticky; left: 0; z-index: 1; background: var(--warning-color);';
+    const stickyTd = 'padding: 0.6rem 0.5rem; font-weight: 600; color: var(--text-primary); position: sticky; left: 0; z-index: 1; background: var(--card-bg); white-space: nowrap;';
+
+    let html = `<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">`;
+    html += `<thead><tr style="background: var(--warning-color); color: white;">
+        <th style="${stickyTh}">Game</th><th style="${thStyle}">Score</th>
+        <th style="${thStyle}">G</th><th style="${thStyle}">A</th><th style="${thStyle}">Pts</th>
+        <th style="${thStyle}">Sh</th><th style="${thStyle}">Sh%</th><th style="${thStyle}">GB</th>
+        <th style="${thStyle}">FOW</th><th style="${thStyle}">FOL</th><th style="${thStyle}">FO%</th>
+        <th style="${thStyle}">TO</th><th style="${thStyle}">TA</th><th style="${thStyle}">Sv</th><th style="${thStyle}">Pen</th>
+    </tr></thead><tbody>`;
+
+    const totals = { g: 0, a: 0, pts: 0, sh: 0, gb: 0, fow: 0, fol: 0, to: 0, ta: 0, sv: 0, pen: 0 };
+    let gamesPlayed = 0;
+
+    sortedGames.forEach((game, i) => {
+        if (!game.stats || !game.stats[playerId]) return;
+        gamesPlayed++;
+        const ps = game.stats[playerId];
+        const g = getStatCount(ps.goal), a = getStatCount(ps.assist), sh = getStatCount(ps.shot);
+        const fow = getStatCount(ps['faceoff-won']), fol = getStatCount(ps['faceoff-lost']);
+        const gb = getStatCount(ps['ground-ball']), to = getStatCount(ps.turnover);
+        const ta = getStatCount(ps['caused-turnover']), sv = getStatCount(ps.save), pen = getStatCount(ps.penalty);
+        const pts = g + a;
+        totals.g += g; totals.a += a; totals.pts += pts; totals.sh += sh; totals.gb += gb;
+        totals.fow += fow; totals.fol += fol; totals.to += to; totals.ta += ta; totals.sv += sv; totals.pen += pen;
+
+        const date = new Date(game.completedAt || game.datetime);
+        const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        const result = game.homeScore > game.awayScore ? 'W' : game.homeScore < game.awayScore ? 'L' : 'T';
+        const resultColor = result === 'W' ? '#10b981' : result === 'L' ? '#ef4444' : '#94a3b8';
+        const shPct = sh > 0 ? Math.round(g / sh * 100) + '%' : '-';
+        const foPct = (fow + fol) > 0 ? Math.round(fow / (fow + fol) * 100) + '%' : '-';
+        const bg = i % 2 === 0 ? '' : 'background: rgba(255,255,255,0.02);';
+
+        html += `<tr style="border-bottom: 1px solid var(--border-color); ${bg}">
+            <td style="${stickyTd} ${bg}"><span style="color: ${resultColor}; font-weight: 700;">${result}</span> vs ${game.opponent}<br><span style="font-size: 0.75rem; color: var(--text-secondary);">${dateStr}</span></td>
+            <td style="${tdStyle} font-weight: 600;"><span style="color: ${resultColor};">${game.homeScore}-${game.awayScore}</span></td>
+            <td style="${tdStyle}">${g}</td><td style="${tdStyle}">${a}</td><td style="${tdStyle} font-weight: 700;">${pts}</td>
+            <td style="${tdStyle}">${sh}</td><td style="${tdStyle}">${shPct}</td><td style="${tdStyle}">${gb}</td>
+            <td style="${tdStyle}">${fow}</td><td style="${tdStyle}">${fol}</td><td style="${tdStyle}">${foPct}</td>
+            <td style="${tdStyle}">${to}</td><td style="${tdStyle}">${ta}</td><td style="${tdStyle}">${sv}</td><td style="${tdStyle}">${pen}</td>
+        </tr>`;
+    });
+
+    // Totals row
+    const tShPct = totals.sh > 0 ? Math.round(totals.g / totals.sh * 100) + '%' : '-';
+    const tFoPct = (totals.fow + totals.fol) > 0 ? Math.round(totals.fow / (totals.fow + totals.fol) * 100) + '%' : '-';
+    html += `<tr style="border-top: 3px solid var(--warning-color); font-weight: 700;">
+        <td style="${stickyTd} background: var(--card-bg);">Season Totals</td>
+        <td style="${tdStyle}">${gamesPlayed} GP</td>
+        <td style="${tdStyle}">${totals.g}</td><td style="${tdStyle}">${totals.a}</td><td style="${tdStyle}">${totals.pts}</td>
+        <td style="${tdStyle}">${totals.sh}</td><td style="${tdStyle}">${tShPct}</td><td style="${tdStyle}">${totals.gb}</td>
+        <td style="${tdStyle}">${totals.fow}</td><td style="${tdStyle}">${totals.fol}</td><td style="${tdStyle}">${tFoPct}</td>
+        <td style="${tdStyle}">${totals.to}</td><td style="${tdStyle}">${totals.ta}</td><td style="${tdStyle}">${totals.sv}</td><td style="${tdStyle}">${totals.pen}</td>
+    </tr>`;
+
+    html += `</tbody></table></div>`;
+    container.innerHTML = html;
 }
 
 // ===== SETTINGS =====
