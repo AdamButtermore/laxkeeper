@@ -100,7 +100,7 @@ var LaxSync = (function () {
         if (!user) return;
         retryCount = retryCount || 0;
         var userRef = firebase.firestore().collection('users').doc(user.uid);
-        userRef.get().then(function (doc) {
+        userRef.get({ source: 'server' }).then(function (doc) {
             if (doc.exists && doc.data().teams && doc.data().teams.length > 0) {
                 var cloudTeams = doc.data().teams;
                 var localTeams = getUserTeams();
