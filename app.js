@@ -950,7 +950,7 @@ function editGameStats(gameId) {
     });
     html += '</tr></thead><tbody>';
 
-    roster.forEach(player => {
+    [...roster].sort((a, b) => Number(a.number) - Number(b.number)).forEach(player => {
         const stats = game.stats[player.id];
         if (!stats) return;
 
@@ -1060,7 +1060,7 @@ function viewGameStats(gameId) {
                 <tbody>`;
 
     let hasStats = false;
-    roster.forEach(player => {
+    [...roster].sort((a, b) => Number(a.number) - Number(b.number)).forEach(player => {
         const stats = game.stats[player.id];
         if (!stats) return;
 
@@ -1179,10 +1179,10 @@ function loadSeasonSummary() {
         stats.totalPoints = stats.totalGoals + stats.totalAssists;
     });
 
-    // Sort by total points (goals + assists)
+    // Sort by jersey number ascending
     const sortedPlayers = Object.values(seasonStats)
         .filter(s => s.gamesPlayed > 0)
-        .sort((a, b) => b.totalPoints - a.totalPoints);
+        .sort((a, b) => Number(a.player.number) - Number(b.player.number));
 
     let html = '<div style="padding: 0.5rem;">';
 
