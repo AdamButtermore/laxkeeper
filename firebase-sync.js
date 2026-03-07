@@ -623,31 +623,58 @@ var LaxSync = (function () {
     }
 
     function forcePush() {
-        var user = firebase.auth().currentUser;
-        if (user) uid = user.uid;
+        try {
+            var user = firebase.auth().currentUser;
+            if (user) uid = user.uid;
 
-        if (!uid) {
-            alert('You must be signed in to sync.');
-            return;
+            if (!uid) {
+                alert('You must be signed in to sync.');
+                return;
+            }
+
+            var activeCode = getActiveTeam();
+            if (!activeCode) {
+                alert('No active team. Create or join a team first.');
+                return;
+            }
+
+            if (!confirm('This will overwrite cloud data with what\'s on this device. Continue?')) {
+                return;
+            }
+
+            monkeyPatchLocalStorage();
+            userDocRef = firebase.firestore().collection('teams').doc(activeCode).collection('data');
+
+            var roster = localStorage.getItem('laxkeeper_roster');
+            var games = localStorage.getItem('laxkeeper_games');
+            var teamName = localStorage.getItem('laxkeeper_team_name');
+
+            var batch = firebase.firestore().batch();
+            var now = firebase.firestore.FieldValue.serverTimestamp();
+
+            if (roster) {
+                batch.set(userDocRef.doc('roster'), { items: JSON.parse(roster), updatedAt: now });
+            }
+            if (games) {
+                batch.set(userDocRef.doc('games'), { items: JSON.parse(games), updatedAt: now });
+            }
+            if (teamName) {
+                batch.set(userDocRef.doc('settings'), { teamName: teamName, updatedAt: now });
+            }
+
+            batch.commit().then(function () {
+                setupRealtimeListeners();
+                persistTeamsToFirestore();
+                alert('Sync complete! Local data pushed to cloud for team ' + activeCode + '.');
+                console.log('[LaxSync] Force push complete for team:', activeCode);
+            }).catch(function (err) {
+                console.error('[LaxSync] Force push failed:', err);
+                alert('Sync failed: ' + err.message);
+            });
+        } catch (err) {
+            console.error('[LaxSync] Force push error:', err);
+            alert('Sync error: ' + err.message);
         }
-
-        var activeCode = getActiveTeam();
-        if (!activeCode) {
-            alert('No active team. Create or join a team first.');
-            return;
-        }
-
-        monkeyPatchLocalStorage();
-        switchToTeamPath(activeCode);
-
-        if (!confirm('This will overwrite cloud data with what\'s on this device. Continue?')) {
-            return;
-        }
-
-        pushAllToFirestore();
-        setupRealtimeListeners();
-        alert('Local data pushed to cloud for team ' + activeCode + '.');
-        console.log('[LaxSync] Force push complete for team:', activeCode);
     }
 
     function copyTeamCode(code) {
