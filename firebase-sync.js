@@ -431,10 +431,16 @@ var LaxSync = (function () {
     }
 
     function createTeam() {
+        // Ensure we have an authenticated user before proceeding
+        var user = firebase.auth().currentUser;
+        if (user) uid = user.uid;
+
         if (!uid) {
-            alert('Still connecting to cloud. Please wait a moment and try again.');
+            alert('You must be signed in to create a team.');
             return;
         }
+
+        monkeyPatchLocalStorage();
 
         var code = generateTeamCode();
         var db = firebase.firestore();
@@ -505,8 +511,11 @@ var LaxSync = (function () {
     }
 
     function joinTeam() {
+        var user = firebase.auth().currentUser;
+        if (user) uid = user.uid;
+
         if (!uid) {
-            alert('Still connecting to cloud. Please wait a moment and try again.');
+            alert('You must be signed in to join a team.');
             return;
         }
 
