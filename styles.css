@@ -334,6 +334,20 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     font-size: 0.9rem;
 }
 
+.player-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.edit-btn {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
 .delete-btn {
     background: var(--danger-color);
     color: white;
@@ -341,6 +355,39 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     padding: 0.5rem 1rem;
     border-radius: 6px;
     cursor: pointer;
+}
+
+.player-item-editing {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.player-edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.player-edit-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.player-edit-row .input-field {
+    flex: 1;
+}
+
+.player-edit-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.player-edit-actions .btn-primary,
+.player-edit-actions .btn-secondary {
+    padding: 0.5rem 1.25rem;
+    font-size: 0.9rem;
 }
 
 /* Game Form */

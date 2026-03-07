@@ -241,6 +241,65 @@ function deletePlayer(playerId) {
     loadRoster();
 }
 
+function editPlayer(playerId) {
+    const roster = getRoster();
+    const player = roster.find(p => p.id === playerId);
+    if (!player) return;
+
+    const row = document.getElementById(`player-row-${playerId}`);
+    row.classList.add('player-item-editing');
+    row.innerHTML = `
+        <div class="player-edit-form">
+            <input type="text" id="edit-name-${playerId}" value="${player.name}" class="input-field" placeholder="Name">
+            <div class="player-edit-row">
+                <input type="number" id="edit-number-${playerId}" value="${player.number}" class="input-field" placeholder="#">
+                <select id="edit-position-${playerId}" class="input-field">
+                    <option value="Attack"${player.position === 'Attack' ? ' selected' : ''}>Attack</option>
+                    <option value="Midfield"${player.position === 'Midfield' ? ' selected' : ''}>Midfield</option>
+                    <option value="Defense"${player.position === 'Defense' ? ' selected' : ''}>Defense</option>
+                    <option value="Goalie"${player.position === 'Goalie' ? ' selected' : ''}>Goalie</option>
+                </select>
+            </div>
+            <div class="player-edit-actions">
+                <button class="btn-primary" onclick="savePlayerEdit('${playerId}')">Save</button>
+                <button class="btn-secondary" onclick="cancelPlayerEdit()">Cancel</button>
+            </div>
+        </div>
+    `;
+}
+
+function savePlayerEdit(playerId) {
+    const name = document.getElementById(`edit-name-${playerId}`).value.trim();
+    const number = document.getElementById(`edit-number-${playerId}`).value.trim();
+    const position = document.getElementById(`edit-position-${playerId}`).value;
+
+    if (!name || !number || !position) {
+        alert('Please fill in all fields');
+        return;
+    }
+
+    const roster = getRoster();
+    const player = roster.find(p => p.id === playerId);
+
+    // Check if number is taken by a different player
+    if (roster.some(p => p.number === number && p.id !== playerId)) {
+        alert('That jersey number is already taken');
+        return;
+    }
+
+    player.name = name;
+    player.number = number;
+    player.position = position;
+
+    saveRoster(roster);
+    loadRoster();
+    logEvent('edit_player', { position });
+}
+
+function cancelPlayerEdit() {
+    loadRoster();
+}
+
 function getRoster() {
     const data = localStorage.getItem(STORAGE_KEYS.ROSTER);
     return data ? JSON.parse(data) : [];
@@ -263,13 +322,16 @@ function loadRoster() {
     roster.sort((a, b) => parseInt(a.number) - parseInt(b.number));
 
     display.innerHTML = roster.map(player => `
-        <div class="player-item">
+        <div class="player-item" id="player-row-${player.id}">
             <div class="player-info">
                 <span class="player-number">#${player.number}</span>
                 <strong>${player.name}</strong>
                 <div class="player-position">${player.position}</div>
             </div>
-            <button class="delete-btn" onclick="deletePlayer('${player.id}')">Delete</button>
+            <div class="player-actions">
+                <button class="edit-btn" onclick="editPlayer('${player.id}')">Edit</button>
+                <button class="delete-btn" onclick="deletePlayer('${player.id}')">Delete</button>
+            </div>
         </div>
     `).join('');
 }
