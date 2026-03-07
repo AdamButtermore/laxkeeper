@@ -1039,6 +1039,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 .shot-picker {
     z-index: 2000;
+    flex-direction: column;
+    padding: 1.5rem;
 }
 
 .shot-picker-title {
@@ -1058,7 +1060,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 .shot-picker-field {
     width: 100%;
-    max-width: 400px;
+    max-width: 500px;
     cursor: crosshair;
     border: 2px solid var(--primary-color);
     border-radius: 12px;
