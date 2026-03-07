@@ -622,6 +622,34 @@ var LaxSync = (function () {
         console.log('[LaxSync] Left team:', code);
     }
 
+    function forcePush() {
+        var user = firebase.auth().currentUser;
+        if (user) uid = user.uid;
+
+        if (!uid) {
+            alert('You must be signed in to sync.');
+            return;
+        }
+
+        var activeCode = getActiveTeam();
+        if (!activeCode) {
+            alert('No active team. Create or join a team first.');
+            return;
+        }
+
+        monkeyPatchLocalStorage();
+        switchToTeamPath(activeCode);
+
+        if (!confirm('This will overwrite cloud data with what\'s on this device. Continue?')) {
+            return;
+        }
+
+        pushAllToFirestore();
+        setupRealtimeListeners();
+        alert('Local data pushed to cloud for team ' + activeCode + '.');
+        console.log('[LaxSync] Force push complete for team:', activeCode);
+    }
+
     function copyTeamCode(code) {
         if (!code) code = getActiveTeam();
         if (!code) return;
@@ -730,6 +758,7 @@ var LaxSync = (function () {
         leaveTeam: leaveTeam,
         copyTeamCode: copyTeamCode,
         switchTeam: switchTeam,
+        forcePush: forcePush,
         loadTeamUI: loadTeamUI,
         getActiveTeam: getActiveTeam,
         getUserTeams: getUserTeams,
