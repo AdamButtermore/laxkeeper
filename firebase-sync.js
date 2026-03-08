@@ -688,6 +688,208 @@ var LaxSync = (function () {
         }
     }
 
+    function recoverData() {
+        var user = firebase.auth().currentUser;
+        if (user) uid = user.uid;
+        if (!uid) { alert('You must be signed in.'); return; }
+
+        var activeCode = getActiveTeam();
+        if (!activeCode) { alert('No active team.'); return; }
+
+        var resultsDiv = document.getElementById('recover-results');
+        if (resultsDiv) resultsDiv.innerHTML = '<p style="color:var(--text-secondary);padding:0.5rem 0;">Scanning...</p>';
+
+        var db = firebase.firestore();
+        var localGames = [];
+        try { localGames = JSON.parse(localStorage.getItem('laxkeeper_games') || '[]'); } catch (e) {}
+        var localRoster = [];
+        try { localRoster = JSON.parse(localStorage.getItem('laxkeeper_roster') || '[]'); } catch (e) {}
+        var localGameIds = {};
+        localGames.forEach(function (g) { if (g.id) localGameIds[g.id] = true; });
+        var localPlayerIds = {};
+        localRoster.forEach(function (p) { if (p.id) localPlayerIds[p.id] = true; });
+
+        // Scan all teams the user belongs to
+        var teams = getUserTeams();
+        var allTeamCodes = teams.map(function (t) { return t.code; });
+        // Also include active code in case it's not in the list
+        if (allTeamCodes.indexOf(activeCode) === -1) allTeamCodes.push(activeCode);
+
+        var foundGames = [];
+        var foundPlayers = [];
+        var orphanPlayerIds = {};
+        var scanned = 0;
+
+        function scanTeam(code) {
+            var teamRef = db.collection('teams').doc(code).collection('data');
+            return Promise.all([
+                teamRef.doc('games').get(),
+                teamRef.doc('roster').get()
+            ]).then(function (results) {
+                var gamesDoc = results[0];
+                var rosterDoc = results[1];
+
+                var teamGames = gamesDoc.exists && gamesDoc.data().items ? gamesDoc.data().items : [];
+                var teamRoster = rosterDoc.exists && rosterDoc.data().items ? rosterDoc.data().items : [];
+
+                // Find games not in local
+                teamGames.forEach(function (g) {
+                    if (g.id && !localGameIds[g.id]) {
+                        foundGames.push({ game: g, fromTeam: code });
+                    }
+                    // Check for orphaned player IDs in game stats
+                    if (g.stats) {
+                        Object.keys(g.stats).forEach(function (pid) {
+                            if (!localPlayerIds[pid]) {
+                                orphanPlayerIds[pid] = true;
+                            }
+                        });
+                    }
+                });
+
+                // Also check local games for orphaned players
+                localGames.forEach(function (g) {
+                    if (g.stats) {
+                        Object.keys(g.stats).forEach(function (pid) {
+                            if (!localPlayerIds[pid]) {
+                                orphanPlayerIds[pid] = true;
+                            }
+                        });
+                    }
+                });
+
+                // Try to resolve orphan IDs from this team's roster
+                teamRoster.forEach(function (p) {
+                    if (orphanPlayerIds[p.id] && !localPlayerIds[p.id]) {
+                        var isDuplicate = foundPlayers.some(function (fp) { return fp.id === p.id; });
+                        if (!isDuplicate) {
+                            foundPlayers.push({ id: p.id, name: p.name, number: p.number, position: p.position, fromTeam: code });
+                        }
+                    }
+                });
+            }).catch(function (err) {
+                console.warn('[Recover] Error scanning team ' + code + ':', err.message);
+            });
+        }
+
+        var scanPromises = allTeamCodes.map(function (code) { return scanTeam(code); });
+
+        Promise.all(scanPromises).then(function () {
+            var html = '';
+
+            if (foundGames.length === 0 && foundPlayers.length === 0) {
+                html = '<p style="color:var(--text-secondary);padding:0.5rem 0;">No missing data found. Everything looks good!</p>';
+            } else {
+                if (foundGames.length > 0) {
+                    html += '<h4 style="margin:1rem 0 0.5rem;color:var(--text-primary);">Missing Games (' + foundGames.length + ')</h4>';
+                    foundGames.forEach(function (fg, i) {
+                        var g = fg.game;
+                        var score = (g.homeScore != null ? g.homeScore : '?') + '-' + (g.awayScore != null ? g.awayScore : '?');
+                        var label = (g.opponent || 'Unknown') + ' ' + score + ' (' + (g.date || 'no date') + ')';
+                        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;margin-bottom:0.25rem;background:var(--bg-color);border-radius:8px;">';
+                        html += '<span style="color:var(--text-primary);font-size:0.9rem;">' + escapeHtml(label) + '</span>';
+                        html += '<button class="btn-primary" style="padding:0.4rem 0.75rem;font-size:0.8rem;" onclick="LaxSync.recoverGame(' + i + ')">Recover</button>';
+                        html += '</div>';
+                    });
+                }
+
+                if (foundPlayers.length > 0) {
+                    html += '<h4 style="margin:1rem 0 0.5rem;color:var(--text-primary);">Orphaned Players (' + foundPlayers.length + ')</h4>';
+                    html += '<p style="color:var(--text-secondary);font-size:0.8rem;margin-bottom:0.5rem;">Players with stats in games but missing from your roster.</p>';
+                    foundPlayers.forEach(function (p, i) {
+                        var label = '#' + p.number + ' ' + p.name + ' (' + p.position + ')';
+                        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;margin-bottom:0.25rem;background:var(--bg-color);border-radius:8px;">';
+                        html += '<span style="color:var(--text-primary);font-size:0.9rem;">' + escapeHtml(label) + '</span>';
+                        html += '<button class="btn-primary" style="padding:0.4rem 0.75rem;font-size:0.8rem;" onclick="LaxSync.recoverPlayer(' + i + ')">Add to Roster</button>';
+                        html += '</div>';
+                    });
+                }
+
+                if (foundGames.length > 0 || foundPlayers.length > 0) {
+                    html += '<button class="btn-primary" style="width:100%;margin-top:0.75rem;" onclick="LaxSync.recoverAll()">Recover All</button>';
+                }
+            }
+
+            if (resultsDiv) resultsDiv.innerHTML = html;
+
+            // Store results for recovery buttons
+            recoverState.games = foundGames;
+            recoverState.players = foundPlayers;
+        });
+    }
+
+    var recoverState = { games: [], players: [] };
+
+    function recoverGame(index) {
+        var fg = recoverState.games[index];
+        if (!fg) return;
+        var localGames = [];
+        try { localGames = JSON.parse(localStorage.getItem('laxkeeper_games') || '[]'); } catch (e) {}
+        if (localGames.some(function (g) { return g.id === fg.game.id; })) {
+            alert('Game already in your data.');
+            return;
+        }
+        localGames.push(fg.game);
+        localStorage.setItem('laxkeeper_games', JSON.stringify(localGames));
+        if (typeof loadGameHistory === 'function') loadGameHistory();
+        if (typeof loadScheduledGames === 'function') loadScheduledGames();
+        alert('Game recovered: ' + (fg.game.opponent || 'Unknown'));
+        recoverData(); // refresh results
+    }
+
+    function recoverPlayer(index) {
+        var p = recoverState.players[index];
+        if (!p) return;
+        var roster = [];
+        try { roster = JSON.parse(localStorage.getItem('laxkeeper_roster') || '[]'); } catch (e) {}
+        if (roster.some(function (r) { return r.id === p.id; })) {
+            alert('Player already in roster.');
+            return;
+        }
+        roster.push({ id: p.id, name: p.name, number: p.number, position: p.position });
+        localStorage.setItem('laxkeeper_roster', JSON.stringify(roster));
+        if (typeof loadRoster === 'function') loadRoster();
+        alert('Added #' + p.number + ' ' + p.name + ' to roster.');
+        recoverData(); // refresh results
+    }
+
+    function recoverAll() {
+        var localGames = [];
+        try { localGames = JSON.parse(localStorage.getItem('laxkeeper_games') || '[]'); } catch (e) {}
+        var localGameIds = {};
+        localGames.forEach(function (g) { if (g.id) localGameIds[g.id] = true; });
+
+        var gamesAdded = 0;
+        recoverState.games.forEach(function (fg) {
+            if (!localGameIds[fg.game.id]) {
+                localGames.push(fg.game);
+                gamesAdded++;
+            }
+        });
+        if (gamesAdded) localStorage.setItem('laxkeeper_games', JSON.stringify(localGames));
+
+        var roster = [];
+        try { roster = JSON.parse(localStorage.getItem('laxkeeper_roster') || '[]'); } catch (e) {}
+        var rosterIds = {};
+        roster.forEach(function (p) { if (p.id) rosterIds[p.id] = true; });
+
+        var playersAdded = 0;
+        recoverState.players.forEach(function (p) {
+            if (!rosterIds[p.id]) {
+                roster.push({ id: p.id, name: p.name, number: p.number, position: p.position });
+                playersAdded++;
+            }
+        });
+        if (playersAdded) localStorage.setItem('laxkeeper_roster', JSON.stringify(roster));
+
+        if (typeof loadGameHistory === 'function') loadGameHistory();
+        if (typeof loadScheduledGames === 'function') loadScheduledGames();
+        if (typeof loadRoster === 'function') loadRoster();
+
+        alert('Recovered ' + gamesAdded + ' game(s) and ' + playersAdded + ' player(s).');
+        recoverData(); // refresh results
+    }
+
     function copyTeamCode(code) {
         if (!code) code = getActiveTeam();
         if (!code) return;
@@ -797,6 +999,10 @@ var LaxSync = (function () {
         copyTeamCode: copyTeamCode,
         switchTeam: switchTeam,
         forcePush: forcePush,
+        recoverData: recoverData,
+        recoverGame: recoverGame,
+        recoverPlayer: recoverPlayer,
+        recoverAll: recoverAll,
         loadTeamUI: loadTeamUI,
         getActiveTeam: getActiveTeam,
         getUserTeams: getUserTeams,

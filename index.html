@@ -388,6 +388,13 @@
                     <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
                 </div>
 
+                <div class="settings-section">
+                    <h3>Recover Data</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">Scan all your teams for games or players missing from your active team.</p>
+                    <button class="btn-secondary" onclick="LaxSync.recoverData()" style="width: 100%;">Scan for Missing Data</button>
+                    <div id="recover-results"></div>
+                </div>
+
                 <div class="settings-section danger-zone">
                     <h3>Danger Zone</h3>
                     <button class="btn-danger" onclick="clearAllData()">Clear All Data</button>
