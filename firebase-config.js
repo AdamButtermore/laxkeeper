@@ -59,7 +59,7 @@ window.firebaseReady = new Promise(function (resolve) {
     });
 });
 
-// Sign in with Google popup
+// Sign in with Google — tries popup first, falls back to redirect (more reliable on mobile)
 function signInWithGoogle() {
     var btn = document.getElementById('google-signin-btn');
     if (btn) {
@@ -72,20 +72,37 @@ function signInWithGoogle() {
         firebase.analytics().logEvent('login', { method: 'google' });
         // onAuthStateChanged will fire and handle the rest
     }).catch(function (err) {
-        console.error('[Firebase] Google sign-in failed:', err);
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = 'Sign in with Google';
-        }
+        console.error('[Firebase] Google popup sign-in failed:', err.code);
+        // Popup failed — fall back to redirect (works better on mobile/in-app browsers)
         if (err.code === 'auth/popup-closed-by-user') {
-            // User closed the popup — no alert needed
-        } else if (err.code === 'auth/popup-blocked') {
-            alert('Pop-up blocked. Please allow pop-ups for this site and try again.');
+            // User intentionally closed — reset button, don't redirect
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Sign in with Google';
+            }
+        } else if (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request' ||
+                   err.code === 'auth/operation-not-supported-in-this-environment') {
+            console.log('[Firebase] Falling back to redirect sign-in');
+            firebase.auth().signInWithRedirect(googleProvider);
         } else {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Sign in with Google';
+            }
             alert('Sign-in failed: ' + err.message);
         }
     });
 }
+
+// Handle redirect result (for when popup fallback was used)
+firebase.auth().getRedirectResult().then(function (result) {
+    if (result.user) {
+        console.log('[Firebase] Redirect sign-in success:', result.user.displayName);
+        firebase.analytics().logEvent('login', { method: 'google_redirect' });
+    }
+}).catch(function (err) {
+    console.error('[Firebase] Redirect result error:', err);
+});
 
 // Sign out
 function signOutUser() {

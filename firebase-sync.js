@@ -1217,6 +1217,15 @@ var LaxSync = (function () {
 
     function logError(err) {
         console.error('[LaxSync] Firestore write failed:', err);
+        // If auth-related, refresh token so next write succeeds
+        if (err.code === 'permission-denied' || err.code === 'unauthenticated') {
+            var user = firebase.auth().currentUser;
+            if (user) {
+                user.getIdToken(true).then(function () {
+                    console.log('[LaxSync] Token refreshed after write failure');
+                }).catch(function () {});
+            }
+        }
     }
 
     function escapeHtml(str) {
@@ -1225,11 +1234,55 @@ var LaxSync = (function () {
         return div.innerHTML;
     }
 
+    // ---- Online/offline reconnect ----
+    // When phone wakes up or regains connectivity, re-verify auth and flush pending writes
+    function setupConnectivityHandlers() {
+        window.addEventListener('online', function () {
+            console.log('[LaxSync] Back online — checking sync state');
+            var user = firebase.auth().currentUser;
+            if (user) {
+                // Refresh auth token (may have expired while offline/asleep)
+                user.getIdToken(true).then(function () {
+                    console.log('[LaxSync] Auth token refreshed after reconnect');
+                    if (userDocRef) {
+                        flushPendingWrites();
+                    } else if (getActiveTeam()) {
+                        // userDocRef lost — re-establish
+                        var code = getActiveTeam();
+                        userDocRef = firebase.firestore().collection('teams').doc(code).collection('data');
+                        flushPendingWrites();
+                    }
+                }).catch(function (err) {
+                    console.warn('[LaxSync] Token refresh failed after reconnect:', err.message);
+                });
+            }
+        });
+
+        // Also handle visibility change (phone screen wake)
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible' && navigator.onLine) {
+                var user = firebase.auth().currentUser;
+                if (user && getActiveTeam()) {
+                    // Silently refresh token to keep Firestore writes working
+                    user.getIdToken(true).catch(function () {});
+                    // Flush anything queued while backgrounded
+                    if (pendingWrites.length > 0 && userDocRef) {
+                        flushPendingWrites();
+                    }
+                }
+            }
+        });
+    }
+
     // ---- Auto-init on DOMContentLoaded ----
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', function () {
+            init();
+            setupConnectivityHandlers();
+        });
     } else {
         init();
+        setupConnectivityHandlers();
     }
 
     return {
