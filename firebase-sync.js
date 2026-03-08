@@ -1092,8 +1092,10 @@ var LaxSync = (function () {
                 if (/eastlake/i.test(opponent)) {
                     g.status = 'completed';
                     if (!g.completedAt) g.completedAt = new Date().toISOString();
+                    if (g.homeScore == null) g.homeScore = 20;
+                    if (g.awayScore == null) g.awayScore = 2;
                     fixed = true;
-                    info += '   → FIXED to completed\n';
+                    info += '   → FIXED: status=completed, score=20-2\n';
                 }
             }
 
