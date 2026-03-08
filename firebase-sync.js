@@ -1074,32 +1074,39 @@ var LaxSync = (function () {
     }
 
     function fixEastlakeStatus() {
-        var games = [];
-        try { games = JSON.parse(localStorage.getItem('laxkeeper_games') || '[]'); } catch (e) {}
+        try {
+            var raw = localStorage.getItem('laxkeeper_games');
+            var games = raw ? JSON.parse(raw) : [];
+            var activeTeam = getActiveTeam();
 
-        var found = false;
-        games.forEach(function (g) {
-            if (/eastlake/i.test(g.opponent) && (g.homeScore == 20 || g.awayScore == 20)) {
-                var oldStatus = g.status;
-                g.status = 'completed';
-                if (!g.completedAt) g.completedAt = new Date().toISOString();
-                found = true;
-                alert('Fixed Eastlake game status: "' + oldStatus + '" → "completed"');
+            var info = 'Active team: ' + activeTeam + '\nGames found: ' + games.length + '\n\n';
+
+            var fixed = false;
+            for (var i = 0; i < games.length; i++) {
+                var g = games[i];
+                var opponent = g.opponent || 'unknown';
+                var score = (g.homeScore != null ? g.homeScore : '?') + '-' + (g.awayScore != null ? g.awayScore : '?');
+                var status = g.status || 'no status';
+                info += (i + 1) + '. ' + opponent + ' ' + score + ' [' + status + ']\n';
+
+                if (/eastlake/i.test(opponent)) {
+                    g.status = 'completed';
+                    if (!g.completedAt) g.completedAt = new Date().toISOString();
+                    fixed = true;
+                    info += '   → FIXED to completed\n';
+                }
             }
-        });
 
-        if (!found) {
-            // Check all 3 games and show their statuses
-            var info = games.map(function (g) {
-                return (g.opponent || '?') + ' — status: "' + (g.status || 'undefined') + '"';
-            }).join('\n');
-            alert('Eastlake 20-2 not found. Games in localStorage:\n\n' + info);
-            return;
+            if (fixed) {
+                localStorage.setItem('laxkeeper_games', JSON.stringify(games));
+                if (typeof loadGameHistory === 'function') loadGameHistory();
+                if (typeof loadScheduledGames === 'function') loadScheduledGames();
+            }
+
+            alert(info);
+        } catch (err) {
+            alert('Error: ' + err.message);
         }
-
-        localStorage.setItem('laxkeeper_games', JSON.stringify(games));
-        if (typeof loadGameHistory === 'function') loadGameHistory();
-        if (typeof loadScheduledGames === 'function') loadScheduledGames();
     }
 
     function fixRedTeamName() {
