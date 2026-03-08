@@ -40,7 +40,9 @@
                     <img src="logo.png" alt="Club logo" class="header-logo">
                     <div>
                         <h1>Laxtracular</h1>
-                        <p id="active-team-display" class="active-team-badge"></p>
+                        <p id="active-team-display" class="active-team-badge" style="display:none;"></p>
+                        <select id="team-selector" class="team-selector-dropdown" onchange="onTeamSelectorChange(this.value)">
+                        </select>
                     </div>
                 </div>
             </header>
@@ -146,6 +148,7 @@
             </header>
 
             <div class="content">
+                <div id="schedule-team-banner" class="schedule-team-banner">Scheduling for: <strong id="schedule-team-name"></strong></div>
                 <div class="game-form">
                     <input type="text" id="opponent-name" placeholder="Opponent Name" class="input-field">
 
@@ -972,9 +975,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-analytics-compat.js"></script>
-    <script src="firebase-config.js?v=12"></script>
-    <script src="firebase-sync.js?v=12"></script>
-    <script src="app.js?v=12"></script>
+    <script src="firebase-config.js?v=13"></script>
+    <script src="firebase-sync.js?v=13"></script>
+    <script src="app.js?v=13"></script>
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('service-worker.js').then(function () {

@@ -1512,6 +1512,62 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     display: none;
 }
 
+/* ===== TEAM SELECTOR DROPDOWN (Home Header) ===== */
+
+.team-selector-dropdown {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background: transparent;
+    border: 1px solid rgba(0, 200, 83, 0.4);
+    border-radius: 6px;
+    color: var(--success-color);
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 0.3rem 1.4rem 0.3rem 0.5rem;
+    cursor: pointer;
+    outline: none;
+    letter-spacing: 0.5px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2300C853'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.4rem center;
+    background-size: 10px 6px;
+    max-width: 200px;
+    text-overflow: ellipsis;
+}
+
+.team-selector-dropdown:focus {
+    border-color: var(--success-color);
+    box-shadow: 0 0 0 2px rgba(0, 200, 83, 0.2);
+}
+
+.team-selector-dropdown option {
+    background: var(--card-bg);
+    color: var(--text-primary);
+}
+
+.team-selector-dropdown:empty {
+    display: none;
+}
+
+/* ===== SCHEDULE TEAM BANNER ===== */
+
+.schedule-team-banner {
+    background: linear-gradient(135deg, #0d3320, #1a4d35);
+    border: 2px solid var(--success-color);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.schedule-team-banner strong {
+    color: var(--success-color);
+    font-weight: 800;
+}
+
 /* ===== GETTING STARTED BANNER ===== */
 
 .getting-started-banner {
@@ -1643,7 +1699,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 .team-list-item.active {
     border-color: var(--success-color);
-    box-shadow: 0 0 0 1px var(--success-color);
+    box-shadow: 0 0 0 2px var(--success-color), 0 0 12px rgba(0, 200, 83, 0.15);
+    background: rgba(0, 200, 83, 0.05);
 }
 
 .team-list-item-info {
@@ -1665,11 +1722,14 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .team-list-item-active-label {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 1px;
-    color: var(--success-color);
+    color: #000;
+    background: var(--success-color);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
     white-space: nowrap;
 }
 
@@ -1700,6 +1760,44 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     background: transparent;
     color: var(--danger-color);
     border: 1px solid var(--danger-color);
+}
+
+.team-leave-section {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-color);
+    text-align: right;
+}
+
+.team-leave-section .team-leave-btn {
+    font-size: 0.7rem;
+    padding: 0.3rem 0.5rem;
+    opacity: 0.7;
+}
+
+.team-leave-section .team-leave-btn:hover {
+    opacity: 1;
+}
+
+/* Move to Team button in game history */
+.btn-move-team {
+    background: transparent;
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 0.5rem;
+    width: 100%;
+    transition: all 0.15s;
+}
+
+.btn-move-team:active {
+    background: var(--primary-color);
+    color: white;
+    transform: scale(0.96);
 }
 
 .team-actions {

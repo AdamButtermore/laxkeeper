@@ -1046,14 +1046,15 @@ var LaxSync = (function () {
             html += '<div class="team-list-item' + (isActive ? ' active' : '') + '" onclick="LaxSync.switchTeam(\'' + team.code + '\')">';
             html += '  <div class="team-list-item-info">';
             html += '    <div class="team-list-item-name">' + escapeHtml(team.name) + '</div>';
-            html += '    <div class="team-list-item-code">' + team.code + '</div>';
+            html += '    <div class="team-list-item-code">' + team.code;
+            html += '      <button class="team-copy-btn" style="margin-left:0.5rem;" onclick="event.stopPropagation(); LaxSync.copyTeamCode(\'' + team.code + '\')">Copy</button>';
+            html += '    </div>';
             html += '  </div>';
             if (isActive) {
                 html += '  <span class="team-list-item-active-label">Active</span>';
             }
-            html += '  <div class="team-list-item-actions">';
-            html += '    <button class="team-copy-btn" onclick="event.stopPropagation(); LaxSync.copyTeamCode(\'' + team.code + '\')">Copy</button>';
-            html += '    <button class="team-leave-btn" onclick="event.stopPropagation(); LaxSync.leaveTeam(\'' + team.code + '\')">Leave</button>';
+            html += '  <div class="team-leave-section" onclick="event.stopPropagation();">';
+            html += '    <button class="team-leave-btn" onclick="LaxSync.leaveTeam(\'' + team.code + '\')">Leave Team</button>';
             html += '  </div>';
             html += '</div>';
         });
@@ -1065,17 +1066,21 @@ var LaxSync = (function () {
     // ---- Active Team Display on Home Screen ----
     function updateActiveTeamDisplay() {
         var badge = document.getElementById('active-team-display');
-        if (!badge) return;
-
-        var activeCode = getActiveTeam();
-        if (!activeCode) {
-            badge.textContent = '';
-            return;
+        if (badge) {
+            var activeCode = getActiveTeam();
+            if (!activeCode) {
+                badge.textContent = '';
+            } else {
+                var teams = getUserTeams();
+                var activeTeam = teams.find(function (t) { return t.code === activeCode; });
+                badge.textContent = activeTeam ? activeTeam.name : activeCode;
+            }
         }
 
-        var teams = getUserTeams();
-        var activeTeam = teams.find(function (t) { return t.code === activeCode; });
-        badge.textContent = activeTeam ? activeTeam.name : activeCode;
+        // Also update the team selector dropdown if the app has defined it
+        if (typeof renderTeamSelector === 'function') {
+            renderTeamSelector();
+        }
     }
 
     // ---- UI Refresh ----

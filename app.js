@@ -97,11 +97,40 @@ function showSignedInState(user) {
     // Populate account section
     updateAccountUI(user);
 
+    // Render team selector dropdown in header
+    renderTeamSelector();
+
     // Check if new user — show welcome modal
     checkNewUser();
 
     // Update getting started banner visibility
     updateGettingStartedBanner();
+}
+
+// ===== TEAM SELECTOR DROPDOWN =====
+function renderTeamSelector() {
+    const select = document.getElementById('team-selector');
+    if (!select) return;
+
+    const teams = (typeof LaxSync !== 'undefined' && LaxSync.getUserTeams) ? LaxSync.getUserTeams() : [];
+    const activeCode = (typeof LaxSync !== 'undefined' && LaxSync.getActiveTeam) ? LaxSync.getActiveTeam() : '';
+
+    if (teams.length === 0) {
+        select.innerHTML = '';
+        select.style.display = 'none';
+        return;
+    }
+
+    select.style.display = '';
+    select.innerHTML = teams.map(t =>
+        `<option value="${t.code}"${t.code === activeCode ? ' selected' : ''}>${t.name}</option>`
+    ).join('');
+}
+
+function onTeamSelectorChange(code) {
+    if (typeof LaxSync !== 'undefined' && LaxSync.switchTeam) {
+        LaxSync.switchTeam(code);
+    }
 }
 
 function checkNewUser() {
@@ -183,7 +212,29 @@ function showScreen(screenId) {
 
     // Refresh data when showing certain screens
     if (screenId === 'roster-screen') loadRoster();
-    if (screenId === 'schedule-screen') loadScheduledGames();
+    if (screenId === 'schedule-screen') {
+        loadScheduledGames();
+        // Populate team banner
+        const schedTeamName = document.getElementById('schedule-team-name');
+        const schedBanner = document.getElementById('schedule-team-banner');
+        if (schedTeamName && schedBanner) {
+            const teams = (typeof LaxSync !== 'undefined' && LaxSync.getUserTeams) ? LaxSync.getUserTeams() : [];
+            const activeCode = (typeof LaxSync !== 'undefined' && LaxSync.getActiveTeam) ? LaxSync.getActiveTeam() : '';
+            const activeTeam = teams.find(t => t.code === activeCode);
+            if (activeTeam) {
+                schedTeamName.textContent = activeTeam.name;
+                schedBanner.style.display = '';
+            } else {
+                const fallback = localStorage.getItem(STORAGE_KEYS.TEAM_NAME);
+                if (fallback) {
+                    schedTeamName.textContent = fallback;
+                    schedBanner.style.display = '';
+                } else {
+                    schedBanner.style.display = 'none';
+                }
+            }
+        }
+    }
     if (screenId === 'games-screen') loadGamesList();
     if (screenId === 'history-screen') loadGameHistory();
     if (screenId === 'season-summary-screen') loadSeasonSummary();
@@ -1819,6 +1870,7 @@ function loadGameHistory() {
                 </p>
                 <button class="btn-secondary" onclick="viewGameStats('${game.id}')">View Stats</button>
                 <button class="btn-secondary" onclick="editGameStats('${game.id}')" style="margin-top: 0.5rem;">Edit Stats</button>
+                <button class="btn-move-team" onclick="moveGameToTeam('${game.id}')">Move to Team...</button>
                 <button class="btn-danger" onclick="deleteGame('${game.id}')" style="margin-top: 0.5rem;">Delete Game</button>
             </div>
         `;
@@ -1839,6 +1891,78 @@ function deleteGame(gameId) {
     const updated = games.filter(g => g.id !== gameId);
     saveGames(updated);
     loadGameHistory();
+}
+
+function moveGameToTeam(gameId) {
+    const games = getGames();
+    const game = games.find(g => g.id === gameId);
+    if (!game) return;
+
+    const teams = (typeof LaxSync !== 'undefined' && LaxSync.getUserTeams) ? LaxSync.getUserTeams() : [];
+    const activeCode = (typeof LaxSync !== 'undefined' && LaxSync.getActiveTeam) ? LaxSync.getActiveTeam() : '';
+
+    // Filter out active team
+    const otherTeams = teams.filter(t => t.code !== activeCode);
+
+    if (otherTeams.length === 0) {
+        alert('You need at least one other team to move a game. Join or create another team in Settings.');
+        return;
+    }
+
+    // Build overlay to pick destination team
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay overlay--centered';
+
+    const content = document.createElement('div');
+    content.className = 'overlay-content overlay-content--narrow';
+    content.innerHTML = `<h3 style="margin-bottom:1rem;text-align:center;">Move Game</h3>
+        <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;text-align:center;">
+            Move <strong>vs ${game.opponent}</strong> to which team?
+        </p>`;
+
+    otherTeams.forEach(team => {
+        const btn = document.createElement('button');
+        btn.className = 'btn-primary';
+        btn.style.marginBottom = '0.5rem';
+        btn.textContent = team.name;
+        btn.onclick = () => {
+            if (!confirm(`Move this game to "${team.name}"? It will be removed from the current team.`)) return;
+
+            // Write game to destination team's Firestore
+            const db = firebase.firestore();
+            const destRef = db.collection('teams').doc(team.code).collection('data').doc('games');
+
+            destRef.get().then(doc => {
+                const existingItems = (doc.exists && doc.data().items) ? doc.data().items : [];
+                existingItems.push(game);
+                return destRef.set({
+                    items: existingItems,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }).then(() => {
+                // Remove from local games and save (which syncs to active team's Firestore)
+                const updated = games.filter(g => g.id !== gameId);
+                saveGames(updated);
+                loadGameHistory();
+                overlay.remove();
+                alert('Game moved to "' + team.name + '"!');
+            }).catch(err => {
+                console.error('[MoveGame] Failed:', err);
+                alert('Failed to move game: ' + err.message);
+            });
+        };
+        content.appendChild(btn);
+    });
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn-secondary';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = () => overlay.remove();
+    content.appendChild(cancelBtn);
+
+    overlay.appendChild(content);
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
 }
 
 function editGameStats(gameId) {
