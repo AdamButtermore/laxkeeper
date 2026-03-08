@@ -483,10 +483,14 @@ var LaxSync = (function () {
                 try {
                     localStorage.removeItem('laxkeeper_roster');
                     localStorage.removeItem('laxkeeper_games');
+                    localStorage.setItem('laxkeeper_team_name', teamName);
                 } finally {
                     suppressSync = false;
                 }
                 refreshUI();
+
+                // Navigate to home screen so user sees the fresh team
+                if (typeof showScreen === 'function') showScreen('home-screen');
 
                 // Setup realtime listeners
                 setupRealtimeListeners();

@@ -234,10 +234,26 @@ function addPlayer() {
 }
 
 function deletePlayer(playerId) {
-    if (!confirm('Are you sure you want to delete this player?')) return;
+    const roster = getRoster();
+    const player = roster.find(p => p.id === playerId);
+    if (!player) return;
 
-    const roster = getRoster().filter(p => p.id !== playerId);
-    saveRoster(roster);
+    // Check if player has stats in any completed game
+    const games = getGames().filter(g => g.status === 'completed');
+    const hasStats = games.some(g => {
+        const pStats = g.stats && g.stats[playerId];
+        if (!pStats) return false;
+        return Object.values(pStats).some(v => getStatCount(v) > 0);
+    });
+
+    if (hasStats) {
+        if (!confirm(`#${player.number} ${player.name} has stats in completed games. Deleting will remove them from the roster but their historical stats will be kept.\n\nContinue?`)) return;
+    } else {
+        if (!confirm('Are you sure you want to delete this player?')) return;
+    }
+
+    const filtered = roster.filter(p => p.id !== playerId);
+    saveRoster(filtered);
     loadRoster();
 }
 
