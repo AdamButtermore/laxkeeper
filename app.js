@@ -20,6 +20,31 @@ function getStatCount(val) {
     return 0;
 }
 
+// Normalize legacy number stats to arrays so all code paths can assume arrays.
+// Numbers become empty arrays (we lose the count, but gain consistency).
+// Only needed for very old games — new games always init stats as [].
+function normalizeGameStats(game) {
+    if (!game) return;
+    var statKeys = ['faceoff-won','faceoff-lost','ground-ball','shot','goal','assist','turnover','caused-turnover','save','penalty'];
+    if (game.stats) {
+        Object.keys(game.stats).forEach(function (pid) {
+            var ps = game.stats[pid];
+            statKeys.forEach(function (key) {
+                if (ps[key] !== undefined && !Array.isArray(ps[key])) {
+                    ps[key] = [];
+                }
+            });
+        });
+    }
+    if (game.opponentStats) {
+        statKeys.forEach(function (key) {
+            if (game.opponentStats[key] !== undefined && !Array.isArray(game.opponentStats[key])) {
+                game.opponentStats[key] = [];
+            }
+        });
+    }
+}
+
 // Returns a timestamp object from current game clock state
 function recordStatTimestamp() {
     if (!currentGame) return {};
@@ -195,6 +220,22 @@ function updateAccountUI(user) {
             avatarEl.textContent = (user.displayName || 'U').charAt(0).toUpperCase();
         }
     }
+}
+
+// ===== OVERLAY FACTORY =====
+// Creates a fullscreen overlay div, appends it to the body, and returns it.
+// Options: id, centered (adds flex centering), z1100 (higher z-index), className (extra classes)
+function createOverlay(opts) {
+    opts = opts || {};
+    const overlay = document.createElement('div');
+    let cls = 'overlay';
+    if (opts.centered) cls += ' overlay--centered';
+    if (opts.z1100) cls += ' overlay--z1100';
+    if (opts.className) cls += ' ' + opts.className;
+    overlay.className = cls;
+    if (opts.id) overlay.id = opts.id;
+    document.body.appendChild(overlay);
+    return overlay;
 }
 
 // ===== SCREEN NAVIGATION =====
@@ -523,11 +564,11 @@ function promptTeamSelection(game, roster) {
     const teamName = localStorage.getItem(STORAGE_KEYS.TEAM_NAME) || 'Home';
 
     // Create team selection overlay
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 1000; padding: 1rem; display: flex; align-items: center; justify-content: center;';
+    const overlay = createOverlay({ id: 'team-selection-overlay', centered: true });
 
     const container = document.createElement('div');
-    container.style.cssText = 'background: #1a1a1a; border-radius: 12px; padding: 2rem; max-width: 500px; width: 100%; border: 3px solid #0066FF;';
+    container.className = 'overlay-content overlay-content--narrow';
+    container.style.padding = '2rem';
 
     const title = document.createElement('h3');
     title.textContent = 'Which team are you tracking stats for?';
@@ -556,7 +597,6 @@ function promptTeamSelection(game, roster) {
     container.appendChild(awayBtn);
 
     overlay.appendChild(container);
-    document.body.appendChild(overlay);
 }
 
 function initializeGame(game, roster, trackingTeam, trackingTeamName) {
@@ -612,6 +652,7 @@ function initializeGame(game, roster, trackingTeam, trackingTeamName) {
 
     // Save current game
     localStorage.setItem(STORAGE_KEYS.CURRENT_GAME, JSON.stringify(currentGame));
+    if (typeof LaxSync !== 'undefined' && LaxSync.setGameActive) LaxSync.setGameActive();
     logEvent('start_game', { format: game.format });
 
     // Load game screen
@@ -625,6 +666,7 @@ function loadGameScreen() {
         const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_GAME);
         if (saved) {
             currentGame = JSON.parse(saved);
+            normalizeGameStats(currentGame);
         } else {
             showScreen('home-screen');
             return;
@@ -667,35 +709,46 @@ function loadGameScreen() {
     initVoiceRecognition();
 }
 
+function getPeriodLabel(game, full) {
+    if (full) return game.format === 'quarters' ? 'Quarter' : 'Half';
+    return game.format === 'quarters' ? 'Q' : 'H';
+}
+
 function updatePeriodDisplay() {
-    const periodLabel = currentGame.format === 'quarters' ? 'Q' : 'H';
     document.getElementById('period-display').textContent =
-        `${periodLabel}${currentGame.currentPeriod}`;
+        `${getPeriodLabel(currentGame)}${currentGame.currentPeriod}`;
+}
+
+// Core score update: mutates game state, updates period score, updates DOM. Does NOT save.
+function updateScore(team, amount) {
+    const side = team === 'home' ? 'home' : 'away';
+    const scoreKey = side + 'Score';
+    currentGame[scoreKey] = Math.max(0, currentGame[scoreKey] + amount);
+    document.getElementById(side + '-score').textContent = currentGame[scoreKey];
+    if (currentGame.periodScores) {
+        const idx = currentGame.currentPeriod - 1;
+        currentGame.periodScores[side][idx] = Math.max(0, (currentGame.periodScores[side][idx] || 0) + amount);
+    }
 }
 
 function adjustScore(team, amount) {
-    if (team === 'home') {
-        currentGame.homeScore = Math.max(0, currentGame.homeScore + amount);
-        document.getElementById('home-score').textContent = currentGame.homeScore;
-        if (currentGame.periodScores) {
-            const idx = currentGame.currentPeriod - 1;
-            currentGame.periodScores.home[idx] = Math.max(0, (currentGame.periodScores.home[idx] || 0) + amount);
-        }
-    } else {
-        currentGame.awayScore = Math.max(0, currentGame.awayScore + amount);
-        document.getElementById('away-score').textContent = currentGame.awayScore;
-        if (currentGame.periodScores) {
-            const idx = currentGame.currentPeriod - 1;
-            currentGame.periodScores.away[idx] = Math.max(0, (currentGame.periodScores.away[idx] || 0) + amount);
-        }
-    }
+    updateScore(team, amount);
     saveCurrentGame();
 }
 
 // ===== GAME CLOCK =====
-function toggleClock() {
+// Clock pause reason helpers — abstracts the boolean flags for clarity
+function isClockPausedForEvent() {
+    return currentGame && (currentGame.clockPausedForGoal || currentGame.clockPausedForTimeout) && !currentGame.clockRunning;
+}
+
+function clearClockPauseReason() {
     currentGame.clockPausedForGoal = false;
     currentGame.clockPausedForTimeout = false;
+}
+
+function toggleClock() {
+    clearClockPauseReason();
     if (currentGame.clockRunning) {
         pauseClock();
     } else {
@@ -705,16 +758,14 @@ function toggleClock() {
 
 // Auto-resume clock if it was paused for a goal or timeout
 function resumeClockIfGoalPaused() {
-    if (currentGame && (currentGame.clockPausedForGoal || currentGame.clockPausedForTimeout) && !currentGame.clockRunning) {
-        currentGame.clockPausedForGoal = false;
-        currentGame.clockPausedForTimeout = false;
+    if (isClockPausedForEvent()) {
+        clearClockPauseReason();
         startClock();
     }
 }
 
 function startClock() {
-    currentGame.clockPausedForGoal = false;
-    currentGame.clockPausedForTimeout = false;
+    clearClockPauseReason();
     currentGame.clockRunning = true;
     document.getElementById('clock-btn-text').textContent = 'Pause';
     document.getElementById('left-clock-btn-text').textContent = 'PAUSE';
@@ -768,7 +819,7 @@ function nextPeriod() {
         return;
     }
 
-    const periodLabel = currentGame.format === 'quarters' ? 'Quarter' : 'Half';
+    const periodLabel = getPeriodLabel(currentGame, true);
     const nextNum = currentGame.currentPeriod + 1;
     if (!confirm(`Advance to ${periodLabel} ${nextNum}? This will reset the clock.`)) return;
 
@@ -801,9 +852,9 @@ function callTimeout(team) {
     // Pause the clock
     if (currentGame.clockRunning) {
         pauseClock();
-        currentGame.clockPausedForTimeout = true;
     }
-    currentGame.clockPausedForGoal = false; // timeout overrides goal pause
+    clearClockPauseReason();
+    currentGame.clockPausedForTimeout = true;
 
     saveCurrentGame();
     updateTimeoutDisplay();
@@ -829,16 +880,14 @@ function updateTimeoutDisplay() {
     if (homeTimeouts.length > 0) {
         html += `<div style="margin-bottom: 0.25rem;"><strong>${homeName}:</strong> ${homeTimeouts.length} TO`;
         html += ' (' + homeTimeouts.map(t => {
-            const pLabel = currentGame.format === 'quarters' ? 'Q' : 'H';
-            return `${pLabel}${t.period} ${t.time}`;
+            return `${getPeriodLabel(currentGame)}${t.period} ${t.time}`;
         }).join(', ') + ')';
         html += '</div>';
     }
     if (awayTimeouts.length > 0) {
         html += `<div><strong>${awayName}:</strong> ${awayTimeouts.length} TO`;
         html += ' (' + awayTimeouts.map(t => {
-            const pLabel = currentGame.format === 'quarters' ? 'Q' : 'H';
-            return `${pLabel}${t.period} ${t.time}`;
+            return `${getPeriodLabel(currentGame)}${t.period} ${t.time}`;
         }).join(', ') + ')';
         html += '</div>';
     }
@@ -949,11 +998,7 @@ function selectPlayerForStat(playerId) {
             currentGame.stats[playerId]['shot']++;
         }
 
-        currentGame.homeScore++;
-        if (currentGame.periodScores) {
-            currentGame.periodScores.home[currentGame.currentPeriod - 1]++;
-        }
-        document.getElementById('home-score').textContent = currentGame.homeScore;
+        updateScore('home', 1);
 
         // Stop time: pause clock on goal
         if (currentGame.clockType === 'stop' && currentGame.clockRunning) {
@@ -1021,19 +1066,8 @@ function recordOpponentStat() {
         }
 
         // Determine which score to increment based on tracking team
-        if (currentGame.trackingTeam === 'home') {
-            currentGame.awayScore++;
-            if (currentGame.periodScores) {
-                currentGame.periodScores.away[currentGame.currentPeriod - 1]++;
-            }
-            document.getElementById('away-score').textContent = currentGame.awayScore;
-        } else {
-            currentGame.homeScore++;
-            if (currentGame.periodScores) {
-                currentGame.periodScores.home[currentGame.currentPeriod - 1]++;
-            }
-            document.getElementById('home-score').textContent = currentGame.homeScore;
-        }
+        var opponentSide = currentGame.trackingTeam === 'home' ? 'away' : 'home';
+        updateScore(opponentSide, 1);
 
         // Stop time: pause clock on goal
         if (currentGame.clockType === 'stop' && currentGame.clockRunning) {
@@ -1064,11 +1098,11 @@ function promptForAssist(goalScorerId, goalTimestamp) {
     clearStatSelection();
 
     // Create assist prompt overlay
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 1000; padding: 1rem; overflow-y: auto;';
+    const overlay = createOverlay({ id: 'assist-prompt-overlay' });
 
     const container = document.createElement('div');
-    container.style.cssText = 'background: #1a1a1a; border-radius: 12px; padding: 1.5rem; max-width: 600px; margin: 2rem auto; border: 3px solid #0066FF;';
+    container.className = 'overlay-content';
+    container.style.maxWidth = '600px';
 
     const title = document.createElement('h3');
     title.textContent = 'Was there an assist?';
@@ -1121,7 +1155,6 @@ function promptForAssist(goalScorerId, goalTimestamp) {
     container.appendChild(noAssistBtn);
 
     overlay.appendChild(container);
-    document.body.appendChild(overlay);
 }
 
 // ===== GAME MANAGEMENT =====
@@ -1156,6 +1189,7 @@ function endGame() {
     // Clear current game
     localStorage.removeItem(STORAGE_KEYS.CURRENT_GAME);
     currentGame = null;
+    if (typeof LaxSync !== 'undefined' && LaxSync.setGameInactive) LaxSync.setGameInactive();
 
     alert('Game saved!');
     showScreen('home-screen');
@@ -1257,9 +1291,8 @@ function toggleStatsView() {
 
     statsHtml += '</div>';
 
-    const container = document.createElement('div');
+    const container = createOverlay({ id: 'in-game-stats-overlay' });
     container.innerHTML = statsHtml;
-    container.className = 'overlay';
     container.onclick = (e) => {
         if (e.target === container) container.remove();
     };
@@ -1282,8 +1315,6 @@ function toggleStatsView() {
     btnRow.appendChild(closeBtn);
 
     container.firstChild.appendChild(btnRow);
-
-    document.body.appendChild(container);
 }
 
 // ===== SHOT LOCATION CAPTURE =====
@@ -1332,8 +1363,7 @@ function createFieldSVG(darkMode) {
 }
 
 function promptShotLocation(ts, onDone) {
-    const overlay = document.createElement('div');
-    overlay.className = 'overlay overlay--centered shot-picker';
+    const overlay = createOverlay({ id: 'shot-location-overlay', centered: true, className: 'shot-picker' });
 
     const title = document.createElement('div');
     title.className = 'shot-picker-title';
@@ -1411,8 +1441,6 @@ function promptShotLocation(ts, onDone) {
         onDone();
     };
     overlay.appendChild(skipBtn);
-
-    document.body.appendChild(overlay);
 }
 
 function buildShotChartSVG(shots, options) {
@@ -1495,7 +1523,7 @@ function renderAboutShotChartExample() {
 // ===== IN-GAME EDIT LOG =====
 function buildGameLog() {
     const roster = getRoster();
-    const pLabel = currentGame.format === 'quarters' ? 'Q' : 'H';
+    const pLabel = getPeriodLabel(currentGame);
     const entries = [];
 
     const statDisplayNames = {
@@ -1571,9 +1599,7 @@ function buildGameLog() {
 function showInGameEditLog() {
     if (!currentGame) return;
 
-    const overlay = document.createElement('div');
-    overlay.id = 'edit-log-overlay';
-    overlay.className = 'overlay';
+    const overlay = createOverlay({ id: 'edit-log-overlay' });
 
     function renderLog() {
         const entries = buildGameLog();
@@ -1644,7 +1670,6 @@ function showInGameEditLog() {
     }
 
     renderLog();
-    document.body.appendChild(overlay);
 }
 
 function reassignStat(statType, index, oldPlayerId, overlay, refreshFn) {
@@ -1652,8 +1677,7 @@ function reassignStat(statType, index, oldPlayerId, overlay, refreshFn) {
     const roster = getRoster();
 
     // Build a player picker overlay on top
-    const picker = document.createElement('div');
-    picker.className = 'overlay overlay--z1100';
+    const picker = createOverlay({ id: 'reassign-picker-overlay', z1100: true });
 
     const box = document.createElement('div');
     box.className = 'overlay-content overlay-content--narrow';
@@ -1722,7 +1746,6 @@ function reassignStat(statType, index, oldPlayerId, overlay, refreshFn) {
     box.appendChild(cancelBtn);
 
     picker.appendChild(box);
-    document.body.appendChild(picker);
 }
 
 function deleteStatEntry(source, statType, index, playerId, overlay, refreshFn) {
@@ -1910,8 +1933,7 @@ function moveGameToTeam(gameId) {
     }
 
     // Build overlay to pick destination team
-    const overlay = document.createElement('div');
-    overlay.className = 'overlay overlay--centered';
+    const overlay = createOverlay({ id: 'move-game-overlay', centered: true });
 
     const content = document.createElement('div');
     content.className = 'overlay-content overlay-content--narrow';
@@ -1962,7 +1984,6 @@ function moveGameToTeam(gameId) {
 
     overlay.appendChild(content);
     overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-    document.body.appendChild(overlay);
 }
 
 function editGameStats(gameId) {
@@ -2047,9 +2068,8 @@ function editGameStats(gameId) {
     html += '</div>';
 
     // Create overlay
-    const container = document.createElement('div');
+    const container = createOverlay({ id: 'edit-game-stats-overlay' });
     container.innerHTML = html;
-    container.className = 'overlay';
     container.style.padding = '2rem 1rem';
 
     // Save button
@@ -2117,8 +2137,165 @@ function editGameStats(gameId) {
     cancelBtn.style.marginTop = '0.5rem';
     cancelBtn.onclick = () => container.remove();
     container.firstChild.appendChild(cancelBtn);
+}
 
-    document.body.appendChild(container);
+// Render period box score table
+function renderBoxScore(game) {
+    if (!game.periodScores) return '';
+    const ps = game.periodScores;
+    const numPeriods = ps.home.length;
+    const periodLabel = getPeriodLabel(game);
+    const teamName = localStorage.getItem(STORAGE_KEYS.TEAM_NAME) || 'Home';
+    const homeLabel = game.trackingTeam === 'home' ? teamName : game.opponent;
+    const awayLabel = game.trackingTeam === 'home' ? game.opponent : teamName;
+
+    let html = '<div style="overflow-x: auto; margin-bottom: 1.5rem;">';
+    html += '<table class="stat-table" style="width: auto;"><thead><tr><th></th>';
+    for (let i = 0; i < numPeriods; i++) {
+        html += `<th style="padding: 0.5rem 0.75rem;">${periodLabel}${i + 1}</th>`;
+    }
+    html += '<th style="padding: 0.5rem 0.75rem; border-left: 2px solid var(--border-color);">Final</th>';
+    html += '</tr></thead><tbody>';
+
+    [['home', homeLabel, game.homeScore], ['away', awayLabel, game.awayScore]].forEach(([side, label, total]) => {
+        html += `<tr><td style="padding: 0.5rem 1rem;">${label}</td>`;
+        for (let i = 0; i < numPeriods; i++) {
+            html += `<td style="padding: 0.5rem 0.75rem;">${ps[side][i]}</td>`;
+        }
+        html += `<td style="padding: 0.5rem 0.75rem; font-weight: 700; border-left: 2px solid var(--border-color);">${total}</td></tr>`;
+    });
+
+    html += '</tbody></table></div>';
+    return html;
+}
+
+// Compute player stat rows for a game (used by both game stats and season summary)
+function computePlayerRows(game, roster) {
+    const rosterById = {};
+    roster.forEach(p => { rosterById[p.id] = p; });
+    const allPlayers = [...roster];
+    if (game.stats) {
+        Object.keys(game.stats).forEach(pid => {
+            if (!rosterById[pid] && pid !== 'opponent') {
+                allPlayers.push({ id: pid, number: '?', name: 'Unknown (#' + pid.slice(-4) + ')', position: '' });
+            }
+        });
+    }
+
+    const rows = [];
+    [...allPlayers].sort((a, b) => Number(a.number) - Number(b.number)).forEach(player => {
+        const stats = game.stats && game.stats[player.id];
+        if (!stats) return;
+        const totalStats = Object.values(stats).reduce((a, b) => a + getStatCount(b), 0);
+        if (totalStats === 0) return;
+        const goals = getStatCount(stats.goal);
+        const assists = getStatCount(stats.assist);
+        const shots = getStatCount(stats.shot);
+        const fow = getStatCount(stats['faceoff-won']);
+        const fol = getStatCount(stats['faceoff-lost']);
+        rows.push({
+            player, goals, assists, points: goals + assists, shots,
+            shotPct: shots > 0 ? Math.round(goals / shots * 100) : -1,
+            gb: getStatCount(stats['ground-ball']), fow, fol,
+            foPct: (fow + fol) > 0 ? Math.round(fow / (fow + fol) * 100) : -1,
+            to: getStatCount(stats.turnover), ta: getStatCount(stats['caused-turnover']),
+            sv: getStatCount(stats.save), pen: getStatCount(stats.penalty),
+            pim: getPenaltyMinutes(stats.penalty)
+        });
+    });
+    return rows;
+}
+
+// Render player stats table with column highlighting
+function renderPlayerStatsTable(game, roster) {
+    const playerRows = computePlayerRows(game, roster);
+
+    const colKeys = ['goals','assists','points','shots','shotPct','gb','fow','fol','foPct','ta','sv'];
+    const maxVals = {};
+    colKeys.forEach(k => {
+        const vals = playerRows.map(r => r[k]).filter(v => v > 0);
+        maxVals[k] = vals.length > 0 ? Math.max(...vals) : -1;
+    });
+    const grn = (val, key) => val > 0 && val === maxVals[key] ? 'color: var(--color-green-text); font-weight: 700;' : '';
+
+    let html = '<h4 style="margin-top: 1rem;">Player Statistics</h4>';
+    html += `<div style="overflow-x: auto;"><table class="stat-table stat-table-sticky" style="margin-top: 0.5rem;"><thead><tr>
+        <th>Player</th><th>Goals</th><th>Assists</th><th>Points</th><th>Shots</th><th>Shot %</th>
+        <th>Ground Balls</th><th>Faceoff Wins</th><th>Faceoff Losses</th><th>FO Win %</th>
+        <th>Turnovers</th><th>Takeaways</th><th>Saves</th><th>Penalties</th><th>PIM</th>
+    </tr></thead><tbody>`;
+
+    playerRows.forEach(r => {
+        html += `<tr>
+            <td>#${r.player.number} ${r.player.name}</td>
+            <td style="${grn(r.goals,'goals')}">${r.goals}</td>
+            <td style="${grn(r.assists,'assists')}">${r.assists}</td>
+            <td style="font-weight: 600; ${grn(r.points,'points')}">${r.points}</td>
+            <td style="${grn(r.shots,'shots')}">${r.shots}</td>
+            <td style="${grn(r.shotPct,'shotPct')}">${r.shotPct >= 0 ? r.shotPct + '%' : '-'}</td>
+            <td style="${grn(r.gb,'gb')}">${r.gb}</td>
+            <td style="${grn(r.fow,'fow')}">${r.fow}</td>
+            <td style="${grn(r.fol,'fol')}">${r.fol}</td>
+            <td style="${grn(r.foPct,'foPct')}">${r.foPct >= 0 ? r.foPct + '%' : '-'}</td>
+            <td>${r.to}</td>
+            <td style="${grn(r.ta,'ta')}">${r.ta}</td>
+            <td style="${grn(r.sv,'sv')}">${r.sv}</td>
+            <td>${r.pen}</td>
+            <td>${r.pim > 0 ? formatPIM(r.pim) : '-'}</td>
+        </tr>`;
+    });
+
+    if (playerRows.length === 0) {
+        html += `<tr><td colspan="15" style="padding: 1rem; text-align: center; color: var(--text-secondary); font-style: italic;">No stats recorded</td></tr>`;
+    }
+    html += `</tbody></table></div>`;
+    return html;
+}
+
+// Render team stats card (clears, EMO, PK)
+function renderTeamStatsCard(game) {
+    const liveClears = game.clears || [];
+    const ts = game.teamStats || {};
+    const trackSide = game.trackingTeam || 'home';
+    const clrSuccess = liveClears.length > 0
+        ? liveClears.filter(c => c.team === trackSide && c.success).length
+        : (ts.clearsSuccess || 0);
+    const clrFail = liveClears.length > 0
+        ? liveClears.filter(c => c.team === trackSide && !c.success).length
+        : (ts.clearsFail || 0);
+    const oppClrSuccess = liveClears.length > 0
+        ? liveClears.filter(c => c.team !== trackSide && c.success).length
+        : (ts.oppClearsSuccess || 0);
+    const oppClrFail = liveClears.length > 0
+        ? liveClears.filter(c => c.team !== trackSide && !c.success).length
+        : (ts.oppClearsFail || 0);
+
+    const hasClears = (clrSuccess + clrFail + oppClrSuccess + oppClrFail) > 0;
+    const hasEMO = (ts.emoOpportunities || 0) > 0 || (ts.emoGoals || 0) > 0;
+    const hasPK = (ts.pkOpportunities || 0) > 0;
+
+    if (!hasClears && !hasEMO && !hasPK) return '';
+
+    const pct = (num, den) => den > 0 ? Math.round(num / den * 100) + '%' : '-';
+    const clrTotal = clrSuccess + clrFail;
+    const oppClrTotal = oppClrSuccess + oppClrFail;
+    const pkSuccessful = (ts.pkOpportunities || 0) - (ts.pkGoalsAgainst || 0);
+
+    let html = '<div class="team-stats-card">';
+    html += '<h4 style="margin-bottom: 0.75rem;">Team Stats</h4>';
+    html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.9rem;">';
+    if (hasClears) {
+        html += `<div><strong>Clearing:</strong> ${clrSuccess}/${clrTotal} (${pct(clrSuccess, clrTotal)})</div>`;
+        html += `<div><strong>Opp Clearing:</strong> ${oppClrSuccess}/${oppClrTotal} (${pct(oppClrSuccess, oppClrTotal)})</div>`;
+    }
+    if (hasEMO) {
+        html += `<div><strong>Man-Up (EMO):</strong> ${ts.emoGoals || 0}/${ts.emoOpportunities || 0} (${pct(ts.emoGoals || 0, ts.emoOpportunities || 0)})</div>`;
+    }
+    if (hasPK) {
+        html += `<div><strong>Penalty Kill:</strong> ${pkSuccessful >= 0 ? pkSuccessful : 0}/${ts.pkOpportunities || 0} (${pct(pkSuccessful >= 0 ? pkSuccessful : 0, ts.pkOpportunities || 0)})</div>`;
+    }
+    html += '</div></div>';
+    return html;
 }
 
 function viewGameStats(gameId) {
@@ -2136,190 +2313,9 @@ function viewGameStats(gameId) {
         statsHtml += `<p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">${gameDate.toLocaleDateString()} at ${gameDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>`;
     }
 
-    // === BOX SCORE BY PERIOD ===
-    if (game.periodScores) {
-        const ps = game.periodScores;
-        const numPeriods = ps.home.length;
-        const isQuarters = numPeriods === 4;
-        const periodLabel = isQuarters ? 'Q' : 'H';
-
-        statsHtml += '<div style="overflow-x: auto; margin-bottom: 1.5rem;">';
-        statsHtml += '<table class="stat-table" style="width: auto;">';
-        statsHtml += '<thead><tr>';
-        statsHtml += '<th></th>';
-        for (let i = 0; i < numPeriods; i++) {
-            statsHtml += `<th style="padding: 0.5rem 0.75rem;">${periodLabel}${i + 1}</th>`;
-        }
-        statsHtml += '<th style="padding: 0.5rem 0.75rem; border-left: 2px solid var(--border-color);">Final</th>';
-        statsHtml += '</tr></thead><tbody>';
-
-        const teamName = localStorage.getItem(STORAGE_KEYS.TEAM_NAME) || 'Home';
-        const homeLabel = game.trackingTeam === 'home' ? teamName : game.opponent;
-        const awayLabel = game.trackingTeam === 'home' ? game.opponent : teamName;
-
-        // Home row
-        statsHtml += '<tr>';
-        statsHtml += `<td style="padding: 0.5rem 1rem;">${homeLabel}</td>`;
-        for (let i = 0; i < numPeriods; i++) {
-            statsHtml += `<td style="padding: 0.5rem 0.75rem;">${ps.home[i]}</td>`;
-        }
-        statsHtml += `<td style="padding: 0.5rem 0.75rem; font-weight: 700; border-left: 2px solid var(--border-color);">${game.homeScore}</td>`;
-        statsHtml += '</tr>';
-
-        // Away row
-        statsHtml += '<tr>';
-        statsHtml += `<td style="padding: 0.5rem 1rem;">${awayLabel}</td>`;
-        for (let i = 0; i < numPeriods; i++) {
-            statsHtml += `<td style="padding: 0.5rem 0.75rem;">${ps.away[i]}</td>`;
-        }
-        statsHtml += `<td style="padding: 0.5rem 0.75rem; font-weight: 700; border-left: 2px solid var(--border-color);">${game.awayScore}</td>`;
-        statsHtml += '</tr>';
-
-        statsHtml += '</tbody></table></div>';
-    }
-
-    statsHtml += '<h4 style="margin-top: 1rem;">Player Statistics</h4>';
-
-    statsHtml += `
-        <div style="overflow-x: auto;">
-            <table class="stat-table stat-table-sticky" style="margin-top: 0.5rem;">
-                <thead>
-                    <tr>
-                        <th>Player</th>
-                        <th>Goals</th>
-                        <th>Assists</th>
-                        <th>Points</th>
-                        <th>Shots</th>
-                        <th>Shot %</th>
-                        <th>Ground Balls</th>
-                        <th>Faceoff Wins</th>
-                        <th>Faceoff Losses</th>
-                        <th>FO Win %</th>
-                        <th>Turnovers</th>
-                        <th>Takeaways</th>
-                        <th>Saves</th>
-                        <th>Penalties</th>
-                        <th>PIM</th>
-                    </tr>
-                </thead>
-                <tbody>`;
-
-    // Collect player rows first to find column maximums
-    // Build a combined player list: roster + any players in game.stats not in roster
-    const rosterById = {};
-    roster.forEach(p => { rosterById[p.id] = p; });
-    const allPlayers = [...roster];
-    if (game.stats) {
-        Object.keys(game.stats).forEach(pid => {
-            if (!rosterById[pid] && pid !== 'opponent') {
-                allPlayers.push({ id: pid, number: '?', name: 'Unknown (#' + pid.slice(-4) + ')', position: '' });
-            }
-        });
-    }
-
-    const playerRows = [];
-    [...allPlayers].sort((a, b) => Number(a.number) - Number(b.number)).forEach(player => {
-        const stats = game.stats && game.stats[player.id];
-        if (!stats) return;
-        const totalStats = Object.values(stats).reduce((a, b) => a + getStatCount(b), 0);
-        if (totalStats === 0) return;
-        const goals = getStatCount(stats.goal);
-        const assists = getStatCount(stats.assist);
-        const shots = getStatCount(stats.shot);
-        const fow = getStatCount(stats['faceoff-won']);
-        const fol = getStatCount(stats['faceoff-lost']);
-        playerRows.push({
-            player, goals, assists, points: goals + assists, shots,
-            shotPct: shots > 0 ? Math.round(goals / shots * 100) : -1,
-            gb: getStatCount(stats['ground-ball']), fow, fol,
-            foPct: (fow + fol) > 0 ? Math.round(fow / (fow + fol) * 100) : -1,
-            to: getStatCount(stats.turnover), ta: getStatCount(stats['caused-turnover']),
-            sv: getStatCount(stats.save), pen: getStatCount(stats.penalty),
-            pim: getPenaltyMinutes(stats.penalty)
-        });
-    });
-
-    // Find max for each column (only among values > 0)
-    const colKeys = ['goals','assists','points','shots','shotPct','gb','fow','fol','foPct','ta','sv'];
-    const maxVals = {};
-    colKeys.forEach(k => {
-        const vals = playerRows.map(r => r[k]).filter(v => v > 0);
-        maxVals[k] = vals.length > 0 ? Math.max(...vals) : -1;
-    });
-
-    const grn = (val, key) => val > 0 && val === maxVals[key] ? 'color: var(--color-green-text); font-weight: 700;' : '';
-
-    playerRows.forEach(r => {
-        statsHtml += `
-            <tr>
-                <td>#${r.player.number} ${r.player.name}</td>
-                <td style="${grn(r.goals,'goals')}">${r.goals}</td>
-                <td style="${grn(r.assists,'assists')}">${r.assists}</td>
-                <td style="font-weight: 600; ${grn(r.points,'points')}">${r.points}</td>
-                <td style="${grn(r.shots,'shots')}">${r.shots}</td>
-                <td style="${grn(r.shotPct,'shotPct')}">${r.shotPct >= 0 ? r.shotPct + '%' : '-'}</td>
-                <td style="${grn(r.gb,'gb')}">${r.gb}</td>
-                <td style="${grn(r.fow,'fow')}">${r.fow}</td>
-                <td style="${grn(r.fol,'fol')}">${r.fol}</td>
-                <td style="${grn(r.foPct,'foPct')}">${r.foPct >= 0 ? r.foPct + '%' : '-'}</td>
-                <td>${r.to}</td>
-                <td style="${grn(r.ta,'ta')}">${r.ta}</td>
-                <td style="${grn(r.sv,'sv')}">${r.sv}</td>
-                <td>${r.pen}</td>
-                <td>${r.pim > 0 ? formatPIM(r.pim) : '-'}</td>
-            </tr>`;
-    });
-
-    if (playerRows.length === 0) {
-        statsHtml += `<tr><td colspan="15" style="padding: 1rem; text-align: center; color: var(--text-secondary); font-style: italic;">No stats recorded</td></tr>`;
-    }
-
-    statsHtml += `</tbody></table></div>`;
-
-    // === TEAM STATS (clears, EMO, PK) ===
-    // Merge live-tracked clears with post-game teamStats
-    const liveClears = game.clears || [];
-    const ts = game.teamStats || {};
-    const clrSuccess = liveClears.length > 0
-        ? liveClears.filter(c => c.team === (game.trackingTeam || 'home') && c.success).length
-        : (ts.clearsSuccess || 0);
-    const clrFail = liveClears.length > 0
-        ? liveClears.filter(c => c.team === (game.trackingTeam || 'home') && !c.success).length
-        : (ts.clearsFail || 0);
-    const oppClrSuccess = liveClears.length > 0
-        ? liveClears.filter(c => c.team !== (game.trackingTeam || 'home') && c.success).length
-        : (ts.oppClearsSuccess || 0);
-    const oppClrFail = liveClears.length > 0
-        ? liveClears.filter(c => c.team !== (game.trackingTeam || 'home') && !c.success).length
-        : (ts.oppClearsFail || 0);
-
-    const hasClears = (clrSuccess + clrFail + oppClrSuccess + oppClrFail) > 0;
-    const hasEMO = (ts.emoOpportunities || 0) > 0 || (ts.emoGoals || 0) > 0;
-    const hasPK = (ts.pkOpportunities || 0) > 0;
-
-    if (hasClears || hasEMO || hasPK) {
-        const pct = (num, den) => den > 0 ? Math.round(num / den * 100) + '%' : '-';
-        const clrTotal = clrSuccess + clrFail;
-        const oppClrTotal = oppClrSuccess + oppClrFail;
-        const pkSuccessful = (ts.pkOpportunities || 0) - (ts.pkGoalsAgainst || 0);
-
-        statsHtml += '<div class="team-stats-card">';
-        statsHtml += '<h4 style="margin-bottom: 0.75rem;">Team Stats</h4>';
-        statsHtml += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.9rem;">';
-
-        if (hasClears) {
-            statsHtml += `<div><strong>Clearing:</strong> ${clrSuccess}/${clrTotal} (${pct(clrSuccess, clrTotal)})</div>`;
-            statsHtml += `<div><strong>Opp Clearing:</strong> ${oppClrSuccess}/${oppClrTotal} (${pct(oppClrSuccess, oppClrTotal)})</div>`;
-        }
-        if (hasEMO) {
-            statsHtml += `<div><strong>Man-Up (EMO):</strong> ${ts.emoGoals || 0}/${ts.emoOpportunities || 0} (${pct(ts.emoGoals || 0, ts.emoOpportunities || 0)})</div>`;
-        }
-        if (hasPK) {
-            statsHtml += `<div><strong>Penalty Kill:</strong> ${pkSuccessful >= 0 ? pkSuccessful : 0}/${ts.pkOpportunities || 0} (${pct(pkSuccessful >= 0 ? pkSuccessful : 0, ts.pkOpportunities || 0)})</div>`;
-        }
-
-        statsHtml += '</div></div>';
-    }
+    statsHtml += renderBoxScore(game);
+    statsHtml += renderPlayerStatsTable(game, roster);
+    statsHtml += renderTeamStatsCard(game);
 
     // === GAME LOG (chronological event list) ===
     const gameLogEvents = [];
@@ -2426,7 +2422,7 @@ function viewGameStats(gameId) {
             return b.timeRemaining - a.timeRemaining;
         });
 
-        const periodLabel = game.format === 'quarters' ? 'Q' : 'H';
+        const periodLabel = getPeriodLabel(game);
 
         // === SCORING SUMMARY (goals + assists only) ===
         const scoringEvents = gameLogEvents.filter(e => e.statKey === 'goal' || e.statKey === 'assist');
@@ -2520,9 +2516,8 @@ function viewGameStats(gameId) {
 
     statsHtml += '</div>';
 
-    const container = document.createElement('div');
+    const container = createOverlay({ id: 'view-game-stats-overlay' });
     container.innerHTML = statsHtml;
-    container.className = 'overlay';
     container.style.padding = '2rem 1rem';
     container.onclick = (e) => {
         if (e.target === container) container.remove();
@@ -2534,8 +2529,6 @@ function viewGameStats(gameId) {
     closeBtn.style.marginTop = '1rem';
     closeBtn.onclick = () => container.remove();
     container.firstChild.appendChild(closeBtn);
-
-    document.body.appendChild(container);
 }
 
 // ===== SEASON SUMMARY =====
@@ -3264,6 +3257,7 @@ function clearAllData() {
     localStorage.removeItem(STORAGE_KEYS.GAMES);
     localStorage.removeItem(STORAGE_KEYS.TEAM_NAME);
     localStorage.removeItem(STORAGE_KEYS.CURRENT_GAME);
+    if (typeof LaxSync !== 'undefined' && LaxSync.setGameInactive) LaxSync.setGameInactive();
 
     alert('All data cleared');
     location.reload();
@@ -3276,21 +3270,8 @@ function showPenaltyTimeSelector(playerId) {
     if (!player) return;
 
     // Create overlay
-    const overlay = document.createElement('div');
-    overlay.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.95);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        z-index: 1000;
-        padding: 2rem;
-    `;
+    const overlay = createOverlay({ id: 'penalty-time-overlay', centered: true });
+    overlay.style.flexDirection = 'column';
 
     overlay.innerHTML = `
         <h2 style="color: #FF1744; margin-bottom: 1rem; font-size: 1.8rem;">Penalty Time</h2>
@@ -3305,8 +3286,6 @@ function showPenaltyTimeSelector(playerId) {
         </div>
         <button id="cancel-penalty" class="btn-secondary" style="margin-top: 2rem; max-width: 400px;">Cancel</button>
     `;
-
-    document.body.appendChild(overlay);
 
     // Add click handlers
     overlay.querySelectorAll('.penalty-time-btn').forEach(btn => {
@@ -3563,7 +3542,7 @@ const VOICE_ALIASES = {
     // Penalty
     'penalize': 'penalty', 'penalties': 'penalty',
     // Faceoff helpers
-    'won': 'win', 'one': 'win', 'want': 'win', 'when': 'win', 'juan': 'win',
+    'won': 'win', 'want': 'win', 'when': 'win', 'juan': 'win',
     'loss': 'lost', 'laws': 'lost', 'los': 'lost',
     'phase': 'face', 'faith': 'face', 'bass': 'face',
     // Ground ball helpers
@@ -3582,7 +3561,7 @@ const STAT_TRIGGERS = [
     { phrases: ['opponent failed clear', 'opp failed clear'], stat: 'opp-failed-clear' },
     { phrases: ['opponent clear', 'opp clear'], stat: 'opp-clear' },
     { phrases: ['ground ball'], stat: 'ground-ball' },
-    { phrases: ['faceoff win', 'face off win'], stat: 'faceoff-won' },
+    { phrases: ['faceoff win', 'face off win', 'faceoff one', 'face off one'], stat: 'faceoff-won' },
     { phrases: ['faceoff lost', 'face off lost', 'faceoff loss', 'face off loss'], stat: 'faceoff-lost' },
     { phrases: ['takeaway', 'take away'], stat: 'caused-turnover' },
     { phrases: ['turnover', 'turn over'], stat: 'turnover' },
@@ -3639,8 +3618,17 @@ function parseVoiceCommand(rawText) {
         playerNumber = allNumbers ? allNumbers[allNumbers.length - 1] : null;
     }
 
+    // 4a. Handle "one" specially — excluded from convertSpokenNumbers because
+    //     speech API often transcribes "won" as "one" (e.g. "faceoff won" → "faceoff one").
+    //     Treat "one" as player #1 only when it's NOT the word right after "faceoff".
+    if (!playerNumber && /\bone\b/i.test(text) && !/face[\s-]?off\s+one\b/i.test(text)) {
+        playerNumber = '1';
+    }
+
     // 4. Strip non-stat text for matching: numbers, filler, opponent words, punctuation
     let statText = text.replace(/\b\d+\b/g, '');
+    // If "one" was consumed as player number, strip it from stat text too
+    if (playerNumber === '1') statText = statText.replace(/\bone\b/gi, '');
     statText = statText.replace(/\b(um|uh|like|the|a|an|so|okay|hey|please|number|player|for|is|it|on|and|at|of|opponent|them|their|other|opposing|team)\b/g, '');
     statText = statText.replace(/[^a-z\s]/g, '');
     statText = statText.replace(/\s+/g, ' ').trim();
@@ -3893,22 +3881,11 @@ function recordVoicePlayerStat(playerId, statType) {
             undoActions.push({ type: 'playerStat', playerId, statType: 'shot', delta: -1 });
         }
 
-        if (currentGame.trackingTeam === 'home') {
-            currentGame.homeScore++;
-            if (currentGame.periodScores) {
-                currentGame.periodScores.home[currentGame.currentPeriod - 1]++;
-                undoActions.push({ type: 'periodScore', team: 'home', period: currentGame.currentPeriod - 1, delta: -1 });
-            }
-            document.getElementById('home-score').textContent = currentGame.homeScore;
-            undoActions.push({ type: 'score', team: 'home', delta: -1 });
-        } else {
-            currentGame.awayScore++;
-            if (currentGame.periodScores) {
-                currentGame.periodScores.away[currentGame.currentPeriod - 1]++;
-                undoActions.push({ type: 'periodScore', team: 'away', period: currentGame.currentPeriod - 1, delta: -1 });
-            }
-            document.getElementById('away-score').textContent = currentGame.awayScore;
-            undoActions.push({ type: 'score', team: 'away', delta: -1 });
+        var scoreSide = currentGame.trackingTeam === 'home' ? 'home' : 'away';
+        updateScore(scoreSide, 1);
+        undoActions.push({ type: 'score', team: scoreSide, delta: -1 });
+        if (currentGame.periodScores) {
+            undoActions.push({ type: 'periodScore', team: scoreSide, period: currentGame.currentPeriod - 1, delta: -1 });
         }
 
         // Stop time: pause clock on goal
@@ -3956,22 +3933,11 @@ function recordVoiceOpponentStat(statType) {
         }
 
         // Opponent's score depends on tracking team
-        if (currentGame.trackingTeam === 'home') {
-            currentGame.awayScore++;
-            if (currentGame.periodScores) {
-                currentGame.periodScores.away[currentGame.currentPeriod - 1]++;
-                undoActions.push({ type: 'periodScore', team: 'away', period: currentGame.currentPeriod - 1, delta: -1 });
-            }
-            document.getElementById('away-score').textContent = currentGame.awayScore;
-            undoActions.push({ type: 'score', team: 'away', delta: -1 });
-        } else {
-            currentGame.homeScore++;
-            if (currentGame.periodScores) {
-                currentGame.periodScores.home[currentGame.currentPeriod - 1]++;
-                undoActions.push({ type: 'periodScore', team: 'home', period: currentGame.currentPeriod - 1, delta: -1 });
-            }
-            document.getElementById('home-score').textContent = currentGame.homeScore;
-            undoActions.push({ type: 'score', team: 'home', delta: -1 });
+        var opponentScoreSide = currentGame.trackingTeam === 'home' ? 'away' : 'home';
+        updateScore(opponentScoreSide, 1);
+        undoActions.push({ type: 'score', team: opponentScoreSide, delta: -1 });
+        if (currentGame.periodScores) {
+            undoActions.push({ type: 'periodScore', team: opponentScoreSide, period: currentGame.currentPeriod - 1, delta: -1 });
         }
 
         // Stop time: pause clock on goal
@@ -4025,10 +3991,8 @@ function undoLastVoiceStat() {
         voiceAssistTimeout = null;
     }
     // Remove any existing assist overlay
-    const overlays = document.querySelectorAll('div[style*="z-index: 1000"]');
-    overlays.forEach(o => {
-        if (o.textContent.includes('Was there an assist?')) o.remove();
-    });
+    const assistOverlay = document.getElementById('assist-prompt-overlay');
+    if (assistOverlay) assistOverlay.remove();
 
     // Reverse each action
     for (const action of last.actions) {
@@ -4072,8 +4036,18 @@ window.addEventListener('load', () => {
         if (!user) return; // Not signed in, skip game resume
         const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_GAME);
         if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed && parsed.status === 'completed') {
+                // Stale completed game — clean up silently (crash between saveGames and removeItem)
+                console.log('[LaxKeeper] Cleaning up stale completed current_game:', parsed.id);
+                localStorage.removeItem(STORAGE_KEYS.CURRENT_GAME);
+                if (typeof LaxSync !== 'undefined' && LaxSync.setGameInactive) LaxSync.setGameInactive();
+                return;
+            }
             if (confirm('You have a game in progress. Continue?')) {
-                currentGame = JSON.parse(saved);
+                currentGame = parsed;
+                normalizeGameStats(currentGame);
+                if (typeof LaxSync !== 'undefined' && LaxSync.setGameActive) LaxSync.setGameActive();
                 loadGameScreen();
                 showScreen('game-screen');
             }

@@ -36,6 +36,10 @@ var LaxSync = (function () {
     // Track whether we've completed initial hydration (prevents queue flush before merge)
     var hydrationComplete = false;
 
+    // Game-in-progress guard: defer incoming snapshots to avoid overwriting active game
+    var gameInProgress = false;
+    var deferredGamesSnapshot = null;
+
     // ---- Init ----
     function init(passedUser) {
         var startup = passedUser
@@ -172,9 +176,7 @@ var LaxSync = (function () {
     }
 
     function getUserTeams() {
-        var raw = localStorage.getItem(USER_TEAMS_KEY);
-        if (!raw) return [];
-        try { return JSON.parse(raw); } catch (e) { return []; }
+        return getLocalArray(USER_TEAMS_KEY);
     }
 
     function setUserTeams(teams) {
@@ -229,7 +231,8 @@ var LaxSync = (function () {
     // Merges cloud and local data by ID instead of overwriting
     // replaceMode: true = cloud fully replaces local (used for team switching)
     //              false/undefined = merge by ID (used for normal startup)
-    function hydrateFromFirestore(replaceMode) {
+    function hydrateFromFirestore(replaceMode, retryCount) {
+        retryCount = retryCount || 0;
         hydrationComplete = false;
         return userDocRef.get().then(function (snapshot) {
             var hasCloudData = false;
@@ -284,16 +287,25 @@ var LaxSync = (function () {
                     pushAllToFirestore();
                 }
             } finally {
+                hydrationComplete = true;
                 suppressSync = false;
+                // Flush any writes that happened before we connected
+                flushPendingWrites();
             }
-
-            hydrationComplete = true;
-            // Flush any writes that happened before we connected
-            flushPendingWrites();
         }).catch(function (err) {
             console.error('[LaxSync] Hydration failed:', err);
-            hydrationComplete = true;
-            flushPendingWrites();
+            if (retryCount < 3) {
+                // Retry after 5s with incremented count
+                setTimeout(function () {
+                    console.log('[LaxSync] Retrying hydration (attempt ' + (retryCount + 2) + '/4)...');
+                    hydrateFromFirestore(replaceMode, retryCount + 1);
+                }, 5000);
+            } else {
+                // Max retries exhausted — unblock the app so it isn't permanently stuck
+                console.error('[LaxSync] Hydration failed after 4 attempts, unblocking app');
+                hydrationComplete = true;
+                flushPendingWrites();
+            }
         });
     }
 
@@ -339,9 +351,8 @@ var LaxSync = (function () {
     }
 
     // Push merged data to Firestore without alerts (used after merge hydration)
-    function pushAllToFirestoreQuiet() {
-        if (!userDocRef) return;
-
+    // Build a Firestore batch containing all local data (roster, games, settings)
+    function buildDataBatch() {
         var roster = localStorage.getItem('laxkeeper_roster');
         var games = localStorage.getItem('laxkeeper_games');
         var teamName = localStorage.getItem('laxkeeper_team_name');
@@ -349,17 +360,25 @@ var LaxSync = (function () {
         var batch = firebase.firestore().batch();
         var now = firebase.firestore.FieldValue.serverTimestamp();
 
-        if (roster) {
-            batch.set(userDocRef.doc('roster'), { items: JSON.parse(roster), updatedAt: now });
+        var parsedRoster = roster ? safeJSONParse(roster) : null;
+        var parsedGames = games ? safeJSONParse(games) : null;
+
+        if (parsedRoster !== null) {
+            batch.set(userDocRef.doc('roster'), { items: parsedRoster, updatedAt: now });
         }
-        if (games) {
-            batch.set(userDocRef.doc('games'), { items: JSON.parse(games), updatedAt: now });
+        if (parsedGames !== null) {
+            batch.set(userDocRef.doc('games'), { items: parsedGames, updatedAt: now });
         }
         if (teamName) {
             batch.set(userDocRef.doc('settings'), { teamName: teamName, updatedAt: now });
         }
 
-        batch.commit().then(function () {
+        return batch;
+    }
+
+    function pushAllToFirestoreQuiet() {
+        if (!userDocRef) return;
+        buildDataBatch().commit().then(function () {
             console.log('[LaxSync] Pushed merged data to Firestore');
         }).catch(function (err) {
             console.error('[LaxSync] Post-merge push failed:', err);
@@ -368,25 +387,7 @@ var LaxSync = (function () {
 
     function pushAllToFirestore() {
         if (!userDocRef) return;
-
-        var roster = localStorage.getItem('laxkeeper_roster');
-        var games = localStorage.getItem('laxkeeper_games');
-        var teamName = localStorage.getItem('laxkeeper_team_name');
-
-        var batch = firebase.firestore().batch();
-        var now = firebase.firestore.FieldValue.serverTimestamp();
-
-        if (roster) {
-            batch.set(userDocRef.doc('roster'), { items: JSON.parse(roster), updatedAt: now });
-        }
-        if (games) {
-            batch.set(userDocRef.doc('games'), { items: JSON.parse(games), updatedAt: now });
-        }
-        if (teamName) {
-            batch.set(userDocRef.doc('settings'), { teamName: teamName, updatedAt: now });
-        }
-
-        batch.commit().then(function () {
+        buildDataBatch().commit().then(function () {
             console.log('[LaxSync] Push to Firestore complete');
         }).catch(function (err) {
             console.error('[LaxSync] Push failed:', err);
@@ -419,11 +420,17 @@ var LaxSync = (function () {
         };
     }
 
+    // Replace any existing queued write for the same key (only latest value matters)
+    function queuePendingWrite(key, value) {
+        pendingWrites = pendingWrites.filter(function (w) { return w.key !== key; });
+        pendingWrites.push({ key: key, value: value });
+    }
+
     function syncToFirestore(key, value) {
-        if (!userDocRef) {
+        if (!userDocRef || !hydrationComplete) {
             // Queue the write — will be flushed after hydration completes
-            pendingWrites.push({ key: key, value: value });
-            console.log('[LaxSync] Queued write for', key, '(not connected yet)');
+            queuePendingWrite(key, value);
+            console.log('[LaxSync] Queued write for', key, (!userDocRef ? '(not connected yet)' : '(hydration pending)'));
             return;
         }
 
@@ -445,7 +452,19 @@ var LaxSync = (function () {
         } else {
             var parsed = safeJSONParse(value);
             if (parsed !== null) {
-                userDocRef.doc(docName).set({ items: parsed, updatedAt: now }).catch(logError);
+                // Use transaction to merge by ID instead of last-write-wins
+                var docRef = userDocRef.doc(docName);
+                firebase.firestore().runTransaction(function (transaction) {
+                    return transaction.get(docRef).then(function (doc) {
+                        var cloudArray = (doc.exists && doc.data() && doc.data().items) ? doc.data().items : null;
+                        var merged = mergeArraysByIdDirect(parsed, cloudArray);
+                        transaction.set(docRef, { items: merged || parsed, updatedAt: now });
+                    });
+                }).catch(function (err) {
+                    console.warn('[LaxSync] Transaction failed for ' + docName + ', queuing for retry:', err.message);
+                    // Queue for retry instead of bare set (preserves merge semantics when back online)
+                    queuePendingWrite(key, value);
+                });
             }
         }
     }
@@ -479,6 +498,12 @@ var LaxSync = (function () {
 
         listenDoc('games', function (data) {
             if (data && data.items) {
+                if (gameInProgress) {
+                    // Stash snapshot — will be merged when game ends
+                    deferredGamesSnapshot = data.items;
+                    console.log('[LaxSync] Deferred games snapshot (game in progress)');
+                    return;
+                }
                 writeLocalSuppressed('laxkeeper_games', JSON.stringify(data.items));
                 refreshUI();
             }
@@ -770,24 +795,7 @@ var LaxSync = (function () {
             monkeyPatchLocalStorage();
             userDocRef = firebase.firestore().collection('teams').doc(activeCode).collection('data');
 
-            var roster = localStorage.getItem('laxkeeper_roster');
-            var games = localStorage.getItem('laxkeeper_games');
-            var teamName = localStorage.getItem('laxkeeper_team_name');
-
-            var batch = firebase.firestore().batch();
-            var now = firebase.firestore.FieldValue.serverTimestamp();
-
-            if (roster) {
-                batch.set(userDocRef.doc('roster'), { items: JSON.parse(roster), updatedAt: now });
-            }
-            if (games) {
-                batch.set(userDocRef.doc('games'), { items: JSON.parse(games), updatedAt: now });
-            }
-            if (teamName) {
-                batch.set(userDocRef.doc('settings'), { teamName: teamName, updatedAt: now });
-            }
-
-            batch.commit().then(function () {
+            buildDataBatch().commit().then(function () {
                 setupRealtimeListeners();
                 persistTeamsToFirestore();
                 alert('Sync complete! Local data pushed to cloud for team ' + activeCode + '.');
@@ -814,10 +822,8 @@ var LaxSync = (function () {
         if (resultsDiv) resultsDiv.innerHTML = '<p style="color:var(--text-secondary);padding:0.5rem 0;">Scanning...</p>';
 
         var db = firebase.firestore();
-        var localGames = [];
-        try { localGames = JSON.parse(localStorage.getItem('laxkeeper_games') || '[]'); } catch (e) {}
-        var localRoster = [];
-        try { localRoster = JSON.parse(localStorage.getItem('laxkeeper_roster') || '[]'); } catch (e) {}
+        var localGames = getLocalArray('laxkeeper_games');
+        var localRoster = getLocalArray('laxkeeper_roster');
         var localGameIds = {};
         localGames.forEach(function (g) { if (g.id) localGameIds[g.id] = true; });
         var localPlayerIds = {};
@@ -937,8 +943,7 @@ var LaxSync = (function () {
     function recoverGame(index) {
         var fg = recoverState.games[index];
         if (!fg) return;
-        var localGames = [];
-        try { localGames = JSON.parse(localStorage.getItem('laxkeeper_games') || '[]'); } catch (e) {}
+        var localGames = getLocalArray('laxkeeper_games');
         if (localGames.some(function (g) { return g.id === fg.game.id; })) {
             alert('Game already in your data.');
             return;
@@ -954,8 +959,7 @@ var LaxSync = (function () {
     function recoverPlayer(index) {
         var p = recoverState.players[index];
         if (!p) return;
-        var roster = [];
-        try { roster = JSON.parse(localStorage.getItem('laxkeeper_roster') || '[]'); } catch (e) {}
+        var roster = getLocalArray('laxkeeper_roster');
         if (roster.some(function (r) { return r.id === p.id; })) {
             alert('Player already in roster.');
             return;
@@ -968,8 +972,7 @@ var LaxSync = (function () {
     }
 
     function recoverAll() {
-        var localGames = [];
-        try { localGames = JSON.parse(localStorage.getItem('laxkeeper_games') || '[]'); } catch (e) {}
+        var localGames = getLocalArray('laxkeeper_games');
         var localGameIds = {};
         localGames.forEach(function (g) { if (g.id) localGameIds[g.id] = true; });
 
@@ -982,8 +985,7 @@ var LaxSync = (function () {
         });
         if (gamesAdded) localStorage.setItem('laxkeeper_games', JSON.stringify(localGames));
 
-        var roster = [];
-        try { roster = JSON.parse(localStorage.getItem('laxkeeper_roster') || '[]'); } catch (e) {}
+        var roster = getLocalArray('laxkeeper_roster');
         var rosterIds = {};
         roster.forEach(function (p) { if (p.id) rosterIds[p.id] = true; });
 
@@ -1062,13 +1064,11 @@ var LaxSync = (function () {
         var db = firebase.firestore();
         var teamRef = db.collection('teams').doc(code).collection('data');
 
-        var localGames = [];
-        try { localGames = JSON.parse(localStorage.getItem('laxkeeper_games') || '[]'); } catch (e) {}
+        var localGames = getLocalArray('laxkeeper_games');
         var localGameIds = {};
         localGames.forEach(function (g) { if (g.id) localGameIds[g.id] = true; });
 
-        var localRoster = [];
-        try { localRoster = JSON.parse(localStorage.getItem('laxkeeper_roster') || '[]'); } catch (e) {}
+        var localRoster = getLocalArray('laxkeeper_roster');
         var localPlayerIds = {};
         localRoster.forEach(function (p) { if (p.id) localPlayerIds[p.id] = true; });
 
@@ -1215,6 +1215,13 @@ var LaxSync = (function () {
         }
     }
 
+    // Read a localStorage key as a parsed array, with fallback to []
+    function getLocalArray(key) {
+        var val = localStorage.getItem(key);
+        if (!val) return [];
+        try { return JSON.parse(val); } catch (e) { return []; }
+    }
+
     function logError(err) {
         console.error('[LaxSync] Firestore write failed:', err);
         // If auth-related, refresh token so next write succeeds
@@ -1232,6 +1239,60 @@ var LaxSync = (function () {
         var div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    }
+
+    // ---- Game-in-progress guard ----
+    function setGameActive() {
+        gameInProgress = true;
+        deferredGamesSnapshot = null;
+        console.log('[LaxSync] Game marked active — deferring incoming snapshots');
+    }
+
+    function setGameInactive() {
+        gameInProgress = false;
+        console.log('[LaxSync] Game marked inactive');
+
+        if (deferredGamesSnapshot) {
+            // Merge the deferred cloud snapshot with current local games (which include the just-completed game)
+            var localGames = safeJSONParse(localStorage.getItem('laxkeeper_games'));
+            var merged = mergeArraysByIdDirect(localGames, deferredGamesSnapshot);
+            if (merged) {
+                writeLocalSuppressed('laxkeeper_games', JSON.stringify(merged));
+                // Push merged result back to cloud
+                if (userDocRef) {
+                    var now = firebase.firestore.FieldValue.serverTimestamp();
+                    userDocRef.doc('games').set({ items: merged, updatedAt: now }).catch(logError);
+                }
+            }
+            deferredGamesSnapshot = null;
+            refreshUI();
+        }
+    }
+
+    // Direct array merge (no JSON string parsing needed) — used by setGameInactive and Phase 2 transactions
+    function mergeArraysByIdDirect(localArray, cloudArray) {
+        if (!localArray && !cloudArray) return null;
+        if (!localArray || !Array.isArray(localArray)) return cloudArray || null;
+        if (!cloudArray || !Array.isArray(cloudArray)) return localArray;
+
+        var cloudById = {};
+        cloudArray.forEach(function (item) {
+            if (item && item.id) cloudById[item.id] = item;
+        });
+
+        var merged = cloudArray.slice();
+        var mergedIds = {};
+        merged.forEach(function (item) {
+            if (item && item.id) mergedIds[item.id] = true;
+        });
+
+        localArray.forEach(function (item) {
+            if (item && item.id && !mergedIds[item.id]) {
+                merged.push(item);
+            }
+        });
+
+        return merged;
     }
 
     // ---- Online/offline reconnect ----
@@ -1254,6 +1315,30 @@ var LaxSync = (function () {
                     }
                 }).catch(function (err) {
                     console.warn('[LaxSync] Token refresh failed after reconnect:', err.message);
+                    // Retry once after 5s
+                    setTimeout(function () {
+                        var retryUser = firebase.auth().currentUser;
+                        if (retryUser) {
+                            retryUser.getIdToken(true).then(function () {
+                                console.log('[LaxSync] Token refresh succeeded on retry');
+                                if (userDocRef && pendingWrites.length > 0) flushPendingWrites();
+                            }).catch(function (retryErr) {
+                                console.warn('[LaxSync] Token refresh retry also failed:', retryErr.message);
+                                // Third attempt at 30s — next online/visibility event covers further retries
+                                setTimeout(function () {
+                                    var lastUser = firebase.auth().currentUser;
+                                    if (lastUser) {
+                                        lastUser.getIdToken(true).then(function () {
+                                            console.log('[LaxSync] Token refresh succeeded on third attempt');
+                                            if (userDocRef && pendingWrites.length > 0) flushPendingWrites();
+                                        }).catch(function (thirdErr) {
+                                            console.warn('[LaxSync] Token refresh third attempt failed:', thirdErr.message);
+                                        });
+                                    }
+                                }, 30000);
+                            });
+                        }
+                    }, 5000);
                 });
             }
         });
@@ -1264,7 +1349,18 @@ var LaxSync = (function () {
                 var user = firebase.auth().currentUser;
                 if (user && getActiveTeam()) {
                     // Silently refresh token to keep Firestore writes working
-                    user.getIdToken(true).catch(function () {});
+                    user.getIdToken(true).catch(function (err) {
+                        console.warn('[LaxSync] Token refresh on wake failed:', err.message);
+                        setTimeout(function () {
+                            var retryUser = firebase.auth().currentUser;
+                            if (retryUser) {
+                                retryUser.getIdToken(true).then(function () {
+                                    console.log('[LaxSync] Token refresh succeeded on wake retry');
+                                    if (userDocRef && pendingWrites.length > 0) flushPendingWrites();
+                                }).catch(function () {});
+                            }
+                        }, 5000);
+                    });
                     // Flush anything queued while backgrounded
                     if (pendingWrites.length > 0 && userDocRef) {
                         flushPendingWrites();
@@ -1302,6 +1398,8 @@ var LaxSync = (function () {
         loadTeamUI: loadTeamUI,
         getActiveTeam: getActiveTeam,
         getUserTeams: getUserTeams,
-        updateActiveTeamDisplay: updateActiveTeamDisplay
+        updateActiveTeamDisplay: updateActiveTeamDisplay,
+        setGameActive: setGameActive,
+        setGameInactive: setGameInactive
     };
 })();
