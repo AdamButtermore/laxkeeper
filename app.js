@@ -1048,6 +1048,12 @@ function recordOpponentStat() {
     if (!selectedStat) return;
     resumeClockIfGoalPaused();
 
+    // Special handling for opponent penalty — show time selector
+    if (selectedStat === 'penalty') {
+        showOpponentPenaltyTimeSelector();
+        return;
+    }
+
     // Record stat for opponent team
     const ts = recordStatTimestamp();
     if (Array.isArray(currentGame.opponentStats[selectedStat])) {
@@ -3332,6 +3338,73 @@ function addPenalty(playerId, playerName, playerNumber, duration) {
     updatePenaltyDisplay();
 }
 
+function showOpponentPenaltyTimeSelector() {
+    const opponentName = currentGame.trackingTeam === 'home'
+        ? currentGame.opponent
+        : (localStorage.getItem(STORAGE_KEYS.TEAM_NAME) || 'Opponent');
+
+    const overlay = createOverlay({ id: 'penalty-time-overlay', centered: true });
+    overlay.style.flexDirection = 'column';
+
+    overlay.innerHTML = `
+        <h2 style="color: #FF9100; margin-bottom: 1rem; font-size: 1.8rem;">Opponent Penalty</h2>
+        <h3 style="color: white; margin-bottom: 2rem;">${opponentName}</h3>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; width: 100%; max-width: 400px;">
+            <button class="penalty-time-btn" data-seconds="30">30 sec</button>
+            <button class="penalty-time-btn" data-seconds="60">1 min</button>
+            <button class="penalty-time-btn" data-seconds="90">1:30</button>
+            <button class="penalty-time-btn" data-seconds="120">2 min</button>
+            <button class="penalty-time-btn" data-seconds="150">2:30</button>
+            <button class="penalty-time-btn" data-seconds="180">3 min</button>
+        </div>
+        <button id="cancel-penalty" class="btn-secondary" style="margin-top: 2rem; max-width: 400px;">Cancel</button>
+    `;
+
+    overlay.querySelectorAll('.penalty-time-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const seconds = parseInt(btn.dataset.seconds);
+            addOpponentPenalty(opponentName, seconds);
+            overlay.remove();
+        });
+    });
+
+    overlay.querySelector('#cancel-penalty').addEventListener('click', () => {
+        overlay.remove();
+    });
+
+    clearStatSelection();
+}
+
+function addOpponentPenalty(opponentName, duration) {
+    // Record penalty stat for opponent
+    const penTs = recordStatTimestamp();
+    penTs.duration = duration;
+    if (Array.isArray(currentGame.opponentStats['penalty'])) {
+        currentGame.opponentStats['penalty'].push(penTs);
+    } else {
+        currentGame.opponentStats['penalty']++;
+    }
+
+    // Add to active penalties with opponent flag
+    if (!currentGame.activePenalties) currentGame.activePenalties = [];
+    currentGame.activePenalties.push({
+        playerName: opponentName,
+        playerNumber: '',
+        duration,
+        timeRemaining: duration,
+        isOpponent: true
+    });
+
+    // Stop time: pause clock on penalty
+    if (currentGame.clockType === 'stop' && currentGame.clockRunning) {
+        pauseClock();
+        currentGame.clockPausedForGoal = true;
+    }
+
+    saveCurrentGame();
+    updatePenaltyDisplay();
+}
+
 function updatePenalties() {
     if (!currentGame || !currentGame.activePenalties) return;
 
@@ -3357,10 +3430,14 @@ function updatePenaltyDisplay() {
         const minutes = Math.floor(penalty.timeRemaining / 60);
         const seconds = penalty.timeRemaining % 60;
         const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        const bg = penalty.isOpponent ? '#FF9100' : '#FF1744';
+        const label = penalty.isOpponent
+            ? penalty.playerName
+            : `#${penalty.playerNumber} ${penalty.playerName}`;
 
         return `
-            <div style="background: #FF1744; color: white; padding: 0.5rem 1rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <span style="font-weight: 700;">#${penalty.playerNumber} ${penalty.playerName}</span>
+            <div style="background: ${bg}; color: white; padding: 0.5rem 1rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <span style="font-weight: 700;">${label}</span>
                 <span style="font-family: 'Courier New', monospace; font-size: 1.2rem; font-weight: 900;">${timeStr}</span>
             </div>
         `;
@@ -3765,6 +3842,15 @@ function executeVoiceCommand(parsed, { silent = false } = {}) {
     }
 
     if (parsed.isOpponent && !parsed.playerNumber) {
+        // Opponent penalty — show time selector
+        if (parsed.stat === 'penalty') {
+            showOpponentPenaltyTimeSelector();
+            if (!silent) {
+                showVoiceFeedback('Select penalty time', 'Opponent Penalty');
+                setTimeout(hideVoiceFeedback, 1500);
+            }
+            return 'Opponent Penalty';
+        }
         // Opponent stat
         const result = recordVoiceOpponentStat(parsed.stat);
         if (result) {
