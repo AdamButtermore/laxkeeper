@@ -579,6 +579,11 @@ var LaxSync = (function () {
             return;
         }
 
+        // Prompt for a fresh team name — do NOT copy the current team's name
+        var teamName = prompt('Enter a name for your new team:');
+        if (!teamName || !teamName.trim()) return; // user cancelled
+        teamName = teamName.trim();
+
         monkeyPatchLocalStorage();
 
         var code = generateTeamCode();
@@ -598,8 +603,6 @@ var LaxSync = (function () {
                 return;
             }
 
-            var teamName = localStorage.getItem('laxkeeper_team_name') || 'My Team';
-
             // Write team metadata document
             return db.collection('teams').doc(code).set({
                 teamName: teamName,
@@ -614,18 +617,29 @@ var LaxSync = (function () {
                 // Set as active team
                 localStorage.setItem(ACTIVE_TEAM_KEY, code);
 
+                // Drain pending writes from old team before switching paths
+                pendingWrites = [];
+
+                // Prevent stale hydration state from flushing old data to new team
+                hydrationComplete = false;
+
                 // Switch sync target to team path
                 switchToTeamPath(code);
 
-                // Clear local data so the new team starts fresh
+                // Clear local data so the new team starts completely fresh
                 suppressSync = true;
                 try {
                     localStorage.removeItem('laxkeeper_roster');
                     localStorage.removeItem('laxkeeper_games');
+                    localStorage.removeItem('CURRENT_GAME');
                     localStorage.setItem('laxkeeper_team_name', teamName);
                 } finally {
                     suppressSync = false;
                 }
+
+                // Mark hydration complete for the new (empty) team
+                hydrationComplete = true;
+
                 refreshUI();
 
                 // Navigate to home screen so user sees the fresh team
