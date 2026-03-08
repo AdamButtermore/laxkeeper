@@ -1076,60 +1076,57 @@ var LaxSync = (function () {
     function findEastlakeStats() {
         try {
             var db = firebase.firestore();
-            var srcCode = 'FCD98G';
-
-            db.collection('teams').doc(srcCode).collection('data').doc('games').get().then(function (doc) {
-                if (!doc.exists || !doc.data().items) {
-                    alert('No games found in ' + srcCode);
-                    return;
-                }
-
+            db.collection('teams').doc('FCD98G').collection('data').doc('games').get().then(function (doc) {
+                if (!doc.exists || !doc.data().items) { alert('No games in FCD98G'); return; }
                 var games = doc.data().items;
-                var info = 'All games in ' + srcCode + ':\n\n';
 
-                var bestGame = null;
-                var bestStats = 0;
+                // Show all games and render buttons in recover-results div
+                var div = document.getElementById('recover-results');
+                var html = '<h4 style="margin:1rem 0 0.5rem;color:var(--text-primary);">Games in FCD98G (' + games.length + ')</h4>';
+
+                // Store games globally for button clicks
+                window._fcd98gGames = games;
 
                 games.forEach(function (g, i) {
                     var statCount = g.stats ? Object.keys(g.stats).length : 0;
-                    var opponent = g.opponent || 'unknown';
                     var score = (g.homeScore != null ? g.homeScore : '?') + '-' + (g.awayScore != null ? g.awayScore : '?');
-                    info += (i + 1) + '. ' + opponent + ' ' + score + ' [' + (g.status || '?') + '] stats_players=' + statCount + '\n';
-
-                    if (statCount > bestStats) {
-                        bestGame = g;
-                        bestStats = statCount;
-                    }
+                    var label = (g.opponent || '?') + ' ' + score + ' [' + (g.status || '?') + '] ' + statCount + ' players with stats';
+                    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;margin-bottom:0.25rem;background:var(--bg-color);border-radius:8px;">';
+                    html += '<span style="color:var(--text-primary);font-size:0.85rem;">' + escapeHtml(label) + '</span>';
+                    html += '<button class="btn-primary" style="padding:0.4rem 0.75rem;font-size:0.8rem;white-space:nowrap;" onclick="LaxSync.copyGameFromFCD98G(' + i + ')">Copy</button>';
+                    html += '</div>';
                 });
 
-                if (bestGame && bestStats > 0) {
-                    info += '\nBest game with stats: ' + (bestGame.opponent || '?') + ' (' + bestStats + ' players)\nTap OK to copy it to your active team.';
-                    if (confirm(info)) {
-                        bestGame.status = 'completed';
-                        if (!bestGame.completedAt) bestGame.completedAt = new Date().toISOString();
-                        if (bestGame.homeScore == null) bestGame.homeScore = 20;
-                        if (bestGame.awayScore == null) bestGame.awayScore = 2;
+                if (div) div.innerHTML = html;
+                else alert('Games found: ' + games.length + '. Check recover results section.');
+            }).catch(function (err) { alert('Error: ' + err.message); });
+        } catch (err) { alert('Error: ' + err.message); }
+    }
 
-                        var localGames = JSON.parse(localStorage.getItem('laxkeeper_games') || '[]');
-                        // Remove any existing eastlake game
-                        localGames = localGames.filter(function (g) {
-                            return !/eastlake/i.test(g.opponent);
-                        });
-                        localGames.push(bestGame);
-                        localStorage.setItem('laxkeeper_games', JSON.stringify(localGames));
-                        if (typeof loadGameHistory === 'function') loadGameHistory();
-                        if (typeof loadScheduledGames === 'function') loadScheduledGames();
-                        alert('Done! Game copied with stats.');
-                    }
-                } else {
-                    alert(info + '\nNo games with stats found.');
-                }
-            }).catch(function (err) {
-                alert('Error reading ' + srcCode + ': ' + err.message);
-            });
-        } catch (err) {
-            alert('Error: ' + err.message);
-        }
+    function copyGameFromFCD98G(index) {
+        var games = window._fcd98gGames;
+        if (!games || !games[index]) { alert('Game not found'); return; }
+
+        var g = JSON.parse(JSON.stringify(games[index]));
+        g.status = 'completed';
+        if (!g.completedAt) g.completedAt = new Date().toISOString();
+
+        var localGames = JSON.parse(localStorage.getItem('laxkeeper_games') || '[]');
+
+        // Remove any existing game with same ID or same opponent+date
+        localGames = localGames.filter(function (lg) {
+            if (lg.id && g.id && lg.id === g.id) return false;
+            if (lg.opponent === g.opponent && lg.date === g.date && !lg.stats) return false;
+            return true;
+        });
+
+        localGames.push(g);
+        localStorage.setItem('laxkeeper_games', JSON.stringify(localGames));
+        if (typeof loadGameHistory === 'function') loadGameHistory();
+        if (typeof loadScheduledGames === 'function') loadScheduledGames();
+
+        var statCount = g.stats ? Object.keys(g.stats).length : 0;
+        alert('Copied! ' + (g.opponent || '?') + ' with ' + statCount + ' players of stats.');
     }
 
     function fixEastlakeStatus() {
@@ -1325,6 +1322,7 @@ var LaxSync = (function () {
         recoverFromTeam: recoverFromTeam,
         moveEastlakeGame: moveEastlakeGame,
         findEastlakeStats: findEastlakeStats,
+        copyGameFromFCD98G: copyGameFromFCD98G,
         fixEastlakeStatus: fixEastlakeStatus,
         fixRedTeamName: fixRedTeamName,
         recoverGame: recoverGame,
