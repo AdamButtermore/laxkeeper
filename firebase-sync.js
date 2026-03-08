@@ -31,6 +31,11 @@ var LaxSync = (function () {
     // Flag to suppress Firestore writes during snapshot hydration (prevents echo loops)
     var suppressSync = false;
 
+    // Queue for writes that happen before Firestore connection is ready
+    var pendingWrites = [];
+    // Track whether we've completed initial hydration (prevents queue flush before merge)
+    var hydrationComplete = false;
+
     // ---- Init ----
     function init(passedUser) {
         var startup = passedUser
@@ -209,8 +214,8 @@ var LaxSync = (function () {
         // Point at new Firestore path
         userDocRef = firebase.firestore().collection('teams').doc(code).collection('data');
 
-        // Hydrate localStorage from the new team's Firestore data
-        hydrateFromFirestore().then(function () {
+        // When switching teams, cloud replaces local (different team's data)
+        hydrateFromFirestore(true).then(function () {
             setupRealtimeListeners();
             loadTeamUI();
             updateActiveTeamDisplay();
@@ -221,7 +226,11 @@ var LaxSync = (function () {
     }
 
     // ---- Hydration (first load or join) ----
-    function hydrateFromFirestore() {
+    // Merges cloud and local data by ID instead of overwriting
+    // replaceMode: true = cloud fully replaces local (used for team switching)
+    //              false/undefined = merge by ID (used for normal startup)
+    function hydrateFromFirestore(replaceMode) {
+        hydrationComplete = false;
         return userDocRef.get().then(function (snapshot) {
             var hasCloudData = false;
             var cloudDocs = {};
@@ -231,41 +240,130 @@ var LaxSync = (function () {
                 hasCloudData = true;
             });
 
-            if (hasCloudData) {
-                // Cloud has data — pull it into localStorage
-                hydrateKey('laxkeeper_roster', cloudDocs.roster, 'items');
-                hydrateKey('laxkeeper_games', cloudDocs.games, 'items');
-                hydrateSettings(cloudDocs.settings);
+            suppressSync = true;
+            try {
+                if (hasCloudData) {
+                    var mergedGames, mergedRoster;
 
-                // Refresh the UI so it picks up hydrated data
-                refreshUI();
-            } else {
-                // First time — push localStorage UP to Firestore
-                pushAllToFirestore();
+                    if (replaceMode) {
+                        // Team switch: cloud replaces local entirely
+                        mergedGames = cloudDocs.games ? cloudDocs.games.items : null;
+                        mergedRoster = cloudDocs.roster ? cloudDocs.roster.items : null;
+                    } else {
+                        // Normal startup: merge by ID, keeping local-only items
+                        mergedGames = mergeArrayById(
+                            localStorage.getItem('laxkeeper_games'),
+                            cloudDocs.games ? cloudDocs.games.items : null
+                        );
+                        mergedRoster = mergeArrayById(
+                            localStorage.getItem('laxkeeper_roster'),
+                            cloudDocs.roster ? cloudDocs.roster.items : null
+                        );
+                    }
+
+                    if (mergedGames !== null) {
+                        localStorage.setItem('laxkeeper_games', JSON.stringify(mergedGames));
+                    }
+                    if (mergedRoster !== null) {
+                        localStorage.setItem('laxkeeper_roster', JSON.stringify(mergedRoster));
+                    }
+
+                    // Settings: cloud wins (simple string)
+                    if (cloudDocs.settings && cloudDocs.settings.teamName !== undefined) {
+                        localStorage.setItem('laxkeeper_team_name', cloudDocs.settings.teamName);
+                    }
+
+                    refreshUI();
+
+                    // In merge mode, push merged result back so cloud has any local-only items
+                    if (!replaceMode) {
+                        pushAllToFirestoreQuiet();
+                    }
+                } else {
+                    // First time — push localStorage UP to Firestore
+                    pushAllToFirestore();
+                }
+            } finally {
+                suppressSync = false;
             }
+
+            hydrationComplete = true;
+            // Flush any writes that happened before we connected
+            flushPendingWrites();
         }).catch(function (err) {
             console.error('[LaxSync] Hydration failed:', err);
+            hydrationComplete = true;
+            flushPendingWrites();
         });
     }
 
-    function hydrateKey(localKey, cloudDoc, field) {
-        if (!cloudDoc || cloudDoc[field] === undefined) return;
-
-        var value = cloudDoc[field];
-        if (value === null || value === undefined) {
-            localStorage.removeItem(localKey);
-        } else if (typeof value === 'string') {
-            localStorage.setItem(localKey, value);
-        } else {
-            localStorage.setItem(localKey, JSON.stringify(value));
+    // Merge two arrays by item.id — cloud version wins on conflict, local-only items are kept
+    function mergeArrayById(localJSON, cloudArray) {
+        var localArray = null;
+        if (localJSON) {
+            try { localArray = JSON.parse(localJSON); } catch (e) { localArray = null; }
         }
+
+        // If only one side has data, use it
+        if (!localArray && !cloudArray) return null;
+        if (!localArray || !Array.isArray(localArray)) return cloudArray || null;
+        if (!cloudArray || !Array.isArray(cloudArray)) return localArray;
+
+        // Build map of cloud items by ID
+        var cloudById = {};
+        cloudArray.forEach(function (item) {
+            if (item && item.id) cloudById[item.id] = item;
+        });
+
+        // Start with all cloud items
+        var merged = cloudArray.slice();
+        var mergedIds = {};
+        merged.forEach(function (item) {
+            if (item && item.id) mergedIds[item.id] = true;
+        });
+
+        // Add local-only items (not in cloud)
+        var localOnlyCount = 0;
+        localArray.forEach(function (item) {
+            if (item && item.id && !mergedIds[item.id]) {
+                merged.push(item);
+                localOnlyCount++;
+            }
+        });
+
+        if (localOnlyCount > 0) {
+            console.log('[LaxSync] Merge kept', localOnlyCount, 'local-only item(s)');
+        }
+
+        return merged;
     }
 
-    function hydrateSettings(cloudDoc) {
-        if (!cloudDoc) return;
-        if (cloudDoc.teamName !== undefined) {
-            localStorage.setItem('laxkeeper_team_name', cloudDoc.teamName);
+    // Push merged data to Firestore without alerts (used after merge hydration)
+    function pushAllToFirestoreQuiet() {
+        if (!userDocRef) return;
+
+        var roster = localStorage.getItem('laxkeeper_roster');
+        var games = localStorage.getItem('laxkeeper_games');
+        var teamName = localStorage.getItem('laxkeeper_team_name');
+
+        var batch = firebase.firestore().batch();
+        var now = firebase.firestore.FieldValue.serverTimestamp();
+
+        if (roster) {
+            batch.set(userDocRef.doc('roster'), { items: JSON.parse(roster), updatedAt: now });
         }
+        if (games) {
+            batch.set(userDocRef.doc('games'), { items: JSON.parse(games), updatedAt: now });
+        }
+        if (teamName) {
+            batch.set(userDocRef.doc('settings'), { teamName: teamName, updatedAt: now });
+        }
+
+        batch.commit().then(function () {
+            console.log('[LaxSync] Pushed merged data to Firestore');
+        }).catch(function (err) {
+            console.error('[LaxSync] Post-merge push failed:', err);
+        });
     }
 
     function pushAllToFirestore() {
@@ -322,7 +420,12 @@ var LaxSync = (function () {
     }
 
     function syncToFirestore(key, value) {
-        if (!userDocRef) return;
+        if (!userDocRef) {
+            // Queue the write — will be flushed after hydration completes
+            pendingWrites.push({ key: key, value: value });
+            console.log('[LaxSync] Queued write for', key, '(not connected yet)');
+            return;
+        }
 
         var docName = KEY_MAP[key];
         var now = firebase.firestore.FieldValue.serverTimestamp();
@@ -345,6 +448,17 @@ var LaxSync = (function () {
                 userDocRef.doc(docName).set({ items: parsed, updatedAt: now }).catch(logError);
             }
         }
+    }
+
+    // Flush any writes that were queued before connection was ready
+    function flushPendingWrites() {
+        if (!userDocRef || pendingWrites.length === 0) return;
+        console.log('[LaxSync] Flushing', pendingWrites.length, 'queued write(s)');
+        var writes = pendingWrites.slice();
+        pendingWrites = [];
+        writes.forEach(function (w) {
+            syncToFirestore(w.key, w.value);
+        });
     }
 
     function handleRemove(key) {
@@ -571,8 +685,8 @@ var LaxSync = (function () {
             // Switch sync target to team path
             switchToTeamPath(code);
 
-            // Pull team data down to local (team data wins)
-            hydrateFromFirestore().then(function () {
+            // Pull team data down to local (team data wins — replace mode)
+            hydrateFromFirestore(true).then(function () {
                 setupRealtimeListeners();
 
                 // Persist teams to user doc
