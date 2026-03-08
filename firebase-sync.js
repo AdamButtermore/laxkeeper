@@ -1076,76 +1076,56 @@ var LaxSync = (function () {
     function findEastlakeStats() {
         try {
             var db = firebase.firestore();
-            var teamCodes = getUserTeams().map(function (t) { return t.code; });
-            // Also check FCD98G and 3CTN97 explicitly
-            if (teamCodes.indexOf('FCD98G') === -1) teamCodes.push('FCD98G');
-            if (teamCodes.indexOf('3CTN97') === -1) teamCodes.push('3CTN97');
+            var srcCode = 'FCD98G';
 
-            var info = 'Searching ' + teamCodes.length + ' teams for Eastlake game with stats...\n\n';
+            db.collection('teams').doc(srcCode).collection('data').doc('games').get().then(function (doc) {
+                if (!doc.exists || !doc.data().items) {
+                    alert('No games found in ' + srcCode);
+                    return;
+                }
 
-            var promises = teamCodes.map(function (code) {
-                return db.collection('teams').doc(code).collection('data').doc('games').get().then(function (doc) {
-                    if (!doc.exists || !doc.data().items) return null;
-                    var games = doc.data().items;
-                    for (var i = 0; i < games.length; i++) {
-                        var g = games[i];
-                        if (/eastlake/i.test(g.opponent)) {
-                            var statCount = g.stats ? Object.keys(g.stats).length : 0;
-                            var hasData = g.stats && statCount > 0;
-                            return {
-                                code: code,
-                                game: g,
-                                statPlayers: statCount,
-                                hasData: hasData
-                            };
-                        }
-                    }
-                    return null;
-                }).catch(function () { return null; });
-            });
+                var games = doc.data().items;
+                var info = 'All games in ' + srcCode + ':\n\n';
 
-            Promise.all(promises).then(function (results) {
                 var bestGame = null;
-                results.forEach(function (r) {
-                    if (!r) return;
-                    info += 'Team ' + r.code + ': Eastlake found, ' + r.statPlayers + ' players with stats, score=' + (r.game.homeScore || '?') + '-' + (r.game.awayScore || '?') + ', status=' + (r.game.status || '?') + '\n';
-                    if (r.hasData && (!bestGame || r.statPlayers > bestGame.statPlayers)) {
-                        bestGame = r;
+                var bestStats = 0;
+
+                games.forEach(function (g, i) {
+                    var statCount = g.stats ? Object.keys(g.stats).length : 0;
+                    var opponent = g.opponent || 'unknown';
+                    var score = (g.homeScore != null ? g.homeScore : '?') + '-' + (g.awayScore != null ? g.awayScore : '?');
+                    info += (i + 1) + '. ' + opponent + ' ' + score + ' [' + (g.status || '?') + '] stats_players=' + statCount + '\n';
+
+                    if (statCount > bestStats) {
+                        bestGame = g;
+                        bestStats = statCount;
                     }
                 });
 
-                if (bestGame) {
-                    info += '\nBest version found in team ' + bestGame.code + ' with ' + bestGame.statPlayers + ' players.\nTap OK to copy it to your active team.';
+                if (bestGame && bestStats > 0) {
+                    info += '\nBest game with stats: ' + (bestGame.opponent || '?') + ' (' + bestStats + ' players)\nTap OK to copy it to your active team.';
                     if (confirm(info)) {
-                        // Replace the Eastlake game in localStorage with the full version
+                        bestGame.status = 'completed';
+                        if (!bestGame.completedAt) bestGame.completedAt = new Date().toISOString();
+                        if (bestGame.homeScore == null) bestGame.homeScore = 20;
+                        if (bestGame.awayScore == null) bestGame.awayScore = 2;
+
                         var localGames = JSON.parse(localStorage.getItem('laxkeeper_games') || '[]');
-                        var replaced = false;
-                        for (var i = 0; i < localGames.length; i++) {
-                            if (/eastlake/i.test(localGames[i].opponent)) {
-                                // Keep the fixed score/status but bring in stats
-                                bestGame.game.status = 'completed';
-                                if (!bestGame.game.completedAt) bestGame.game.completedAt = new Date().toISOString();
-                                if (bestGame.game.homeScore == null) bestGame.game.homeScore = 20;
-                                if (bestGame.game.awayScore == null) bestGame.game.awayScore = 2;
-                                localGames[i] = bestGame.game;
-                                replaced = true;
-                                break;
-                            }
-                        }
-                        if (!replaced) {
-                            bestGame.game.status = 'completed';
-                            bestGame.game.homeScore = 20;
-                            bestGame.game.awayScore = 2;
-                            localGames.push(bestGame.game);
-                        }
+                        // Remove any existing eastlake game
+                        localGames = localGames.filter(function (g) {
+                            return !/eastlake/i.test(g.opponent);
+                        });
+                        localGames.push(bestGame);
                         localStorage.setItem('laxkeeper_games', JSON.stringify(localGames));
                         if (typeof loadGameHistory === 'function') loadGameHistory();
-                        alert('Done! Eastlake game replaced with full version from team ' + bestGame.code);
+                        if (typeof loadScheduledGames === 'function') loadScheduledGames();
+                        alert('Done! Game copied with stats.');
                     }
                 } else {
-                    info += '\nNo version with stats found in any team.';
-                    alert(info);
+                    alert(info + '\nNo games with stats found.');
                 }
+            }).catch(function (err) {
+                alert('Error reading ' + srcCode + ': ' + err.message);
             });
         } catch (err) {
             alert('Error: ' + err.message);
