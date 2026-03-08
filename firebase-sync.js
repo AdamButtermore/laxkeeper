@@ -1073,6 +1073,41 @@ var LaxSync = (function () {
         });
     }
 
+    function fixRedTeamName() {
+        var user = firebase.auth().currentUser;
+        if (!user) { alert('You must be signed in.'); return; }
+
+        var code = 'FCD98G';
+        var newName = 'Mt Si 34 Red';
+        var db = firebase.firestore();
+        var now = firebase.firestore.FieldValue.serverTimestamp();
+
+        Promise.all([
+            db.collection('teams').doc(code).set({ teamName: newName, updatedAt: now }, { merge: true }),
+            db.collection('teams').doc(code).collection('data').doc('settings').set({ teamName: newName, updatedAt: now }, { merge: true })
+        ]).then(function () {
+            // Update local teams list
+            var teams = getUserTeams();
+            teams.forEach(function (t) {
+                if (t.code === code) t.name = newName;
+            });
+            setUserTeams(teams);
+
+            // If this is the active team, update localStorage too
+            if (getActiveTeam() === code) {
+                localStorage.setItem('laxkeeper_team_name', newName);
+                refreshUI();
+            }
+
+            loadTeamUI();
+            updateActiveTeamDisplay();
+            alert('Renamed ' + code + ' to "' + newName + '"');
+        }).catch(function (err) {
+            console.error('[LaxSync] Rename failed:', err);
+            alert('Failed: ' + err.message);
+        });
+    }
+
     function copyTeamCode(code) {
         if (!code) code = getActiveTeam();
         if (!code) return;
@@ -1186,6 +1221,7 @@ var LaxSync = (function () {
         recoverData: recoverData,
         recoverFromTeam: recoverFromTeam,
         moveEastlakeGame: moveEastlakeGame,
+        fixRedTeamName: fixRedTeamName,
         recoverGame: recoverGame,
         recoverPlayer: recoverPlayer,
         recoverAll: recoverAll,
