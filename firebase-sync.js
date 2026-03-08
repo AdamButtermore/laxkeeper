@@ -1073,6 +1073,35 @@ var LaxSync = (function () {
         });
     }
 
+    function fixEastlakeStatus() {
+        var games = [];
+        try { games = JSON.parse(localStorage.getItem('laxkeeper_games') || '[]'); } catch (e) {}
+
+        var found = false;
+        games.forEach(function (g) {
+            if (/eastlake/i.test(g.opponent) && (g.homeScore == 20 || g.awayScore == 20)) {
+                var oldStatus = g.status;
+                g.status = 'completed';
+                if (!g.completedAt) g.completedAt = new Date().toISOString();
+                found = true;
+                alert('Fixed Eastlake game status: "' + oldStatus + '" → "completed"');
+            }
+        });
+
+        if (!found) {
+            // Check all 3 games and show their statuses
+            var info = games.map(function (g) {
+                return (g.opponent || '?') + ' — status: "' + (g.status || 'undefined') + '"';
+            }).join('\n');
+            alert('Eastlake 20-2 not found. Games in localStorage:\n\n' + info);
+            return;
+        }
+
+        localStorage.setItem('laxkeeper_games', JSON.stringify(games));
+        if (typeof loadGameHistory === 'function') loadGameHistory();
+        if (typeof loadScheduledGames === 'function') loadScheduledGames();
+    }
+
     function fixRedTeamName() {
         var user = firebase.auth().currentUser;
         if (!user) { alert('You must be signed in.'); return; }
@@ -1221,6 +1250,7 @@ var LaxSync = (function () {
         recoverData: recoverData,
         recoverFromTeam: recoverFromTeam,
         moveEastlakeGame: moveEastlakeGame,
+        fixEastlakeStatus: fixEastlakeStatus,
         fixRedTeamName: fixRedTeamName,
         recoverGame: recoverGame,
         recoverPlayer: recoverPlayer,
