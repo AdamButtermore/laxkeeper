@@ -1073,6 +1073,85 @@ var LaxSync = (function () {
         });
     }
 
+    function findEastlakeStats() {
+        try {
+            var db = firebase.firestore();
+            var teamCodes = getUserTeams().map(function (t) { return t.code; });
+            // Also check FCD98G and 3CTN97 explicitly
+            if (teamCodes.indexOf('FCD98G') === -1) teamCodes.push('FCD98G');
+            if (teamCodes.indexOf('3CTN97') === -1) teamCodes.push('3CTN97');
+
+            var info = 'Searching ' + teamCodes.length + ' teams for Eastlake game with stats...\n\n';
+
+            var promises = teamCodes.map(function (code) {
+                return db.collection('teams').doc(code).collection('data').doc('games').get().then(function (doc) {
+                    if (!doc.exists || !doc.data().items) return null;
+                    var games = doc.data().items;
+                    for (var i = 0; i < games.length; i++) {
+                        var g = games[i];
+                        if (/eastlake/i.test(g.opponent)) {
+                            var statCount = g.stats ? Object.keys(g.stats).length : 0;
+                            var hasData = g.stats && statCount > 0;
+                            return {
+                                code: code,
+                                game: g,
+                                statPlayers: statCount,
+                                hasData: hasData
+                            };
+                        }
+                    }
+                    return null;
+                }).catch(function () { return null; });
+            });
+
+            Promise.all(promises).then(function (results) {
+                var bestGame = null;
+                results.forEach(function (r) {
+                    if (!r) return;
+                    info += 'Team ' + r.code + ': Eastlake found, ' + r.statPlayers + ' players with stats, score=' + (r.game.homeScore || '?') + '-' + (r.game.awayScore || '?') + ', status=' + (r.game.status || '?') + '\n';
+                    if (r.hasData && (!bestGame || r.statPlayers > bestGame.statPlayers)) {
+                        bestGame = r;
+                    }
+                });
+
+                if (bestGame) {
+                    info += '\nBest version found in team ' + bestGame.code + ' with ' + bestGame.statPlayers + ' players.\nTap OK to copy it to your active team.';
+                    if (confirm(info)) {
+                        // Replace the Eastlake game in localStorage with the full version
+                        var localGames = JSON.parse(localStorage.getItem('laxkeeper_games') || '[]');
+                        var replaced = false;
+                        for (var i = 0; i < localGames.length; i++) {
+                            if (/eastlake/i.test(localGames[i].opponent)) {
+                                // Keep the fixed score/status but bring in stats
+                                bestGame.game.status = 'completed';
+                                if (!bestGame.game.completedAt) bestGame.game.completedAt = new Date().toISOString();
+                                if (bestGame.game.homeScore == null) bestGame.game.homeScore = 20;
+                                if (bestGame.game.awayScore == null) bestGame.game.awayScore = 2;
+                                localGames[i] = bestGame.game;
+                                replaced = true;
+                                break;
+                            }
+                        }
+                        if (!replaced) {
+                            bestGame.game.status = 'completed';
+                            bestGame.game.homeScore = 20;
+                            bestGame.game.awayScore = 2;
+                            localGames.push(bestGame.game);
+                        }
+                        localStorage.setItem('laxkeeper_games', JSON.stringify(localGames));
+                        if (typeof loadGameHistory === 'function') loadGameHistory();
+                        alert('Done! Eastlake game replaced with full version from team ' + bestGame.code);
+                    }
+                } else {
+                    info += '\nNo version with stats found in any team.';
+                    alert(info);
+                }
+            });
+        } catch (err) {
+            alert('Error: ' + err.message);
+        }
+    }
+
     function fixEastlakeStatus() {
         try {
             var raw = localStorage.getItem('laxkeeper_games');
@@ -1265,6 +1344,7 @@ var LaxSync = (function () {
         recoverData: recoverData,
         recoverFromTeam: recoverFromTeam,
         moveEastlakeGame: moveEastlakeGame,
+        findEastlakeStats: findEastlakeStats,
         fixEastlakeStatus: fixEastlakeStatus,
         fixRedTeamName: fixRedTeamName,
         recoverGame: recoverGame,
