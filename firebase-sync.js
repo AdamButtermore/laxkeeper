@@ -478,8 +478,15 @@ var LaxSync = (function () {
                 // Switch sync target to team path
                 switchToTeamPath(code);
 
-                // Push current local data up to the new team path
-                pushAllToFirestore();
+                // Clear local data so the new team starts fresh
+                suppressSync = true;
+                try {
+                    localStorage.removeItem('laxkeeper_roster');
+                    localStorage.removeItem('laxkeeper_games');
+                } finally {
+                    suppressSync = false;
+                }
+                refreshUI();
 
                 // Setup realtime listeners
                 setupRealtimeListeners();
