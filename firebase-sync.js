@@ -969,6 +969,67 @@ var LaxSync = (function () {
         });
     }
 
+    function moveEastlakeGame() {
+        var user = firebase.auth().currentUser;
+        if (!user) { alert('You must be signed in.'); return; }
+        uid = user.uid;
+
+        var srcCode = 'FCD98G';
+        var dstCode = '3CTN97';
+        var db = firebase.firestore();
+
+        db.collection('teams').doc(srcCode).collection('data').doc('games').get().then(function (doc) {
+            if (!doc.exists || !doc.data().items) { alert('No games found in ' + srcCode); return; }
+
+            var srcGames = doc.data().items;
+            var eastlake = srcGames.filter(function (g) {
+                return /eastlake/i.test(g.opponent) && (g.homeScore == 20 || g.awayScore == 20);
+            });
+
+            if (eastlake.length === 0) { alert('Eastlake 20-2 game not found in ' + srcCode); return; }
+
+            // Get destination games
+            return db.collection('teams').doc(dstCode).collection('data').doc('games').get().then(function (dstDoc) {
+                var dstGames = dstDoc.exists && dstDoc.data().items ? dstDoc.data().items : [];
+                var dstIds = {};
+                dstGames.forEach(function (g) { if (g.id) dstIds[g.id] = true; });
+
+                var added = 0;
+                eastlake.forEach(function (g) {
+                    if (!dstIds[g.id]) { dstGames.push(g); added++; }
+                });
+
+                if (added === 0) { alert('Eastlake game already in ' + dstCode); return; }
+
+                var now = firebase.firestore.FieldValue.serverTimestamp();
+
+                // Write to destination
+                return db.collection('teams').doc(dstCode).collection('data').doc('games').set({
+                    items: dstGames, updatedAt: now
+                }).then(function () {
+                    // Remove from source
+                    var remaining = srcGames.filter(function (g) {
+                        return !(/eastlake/i.test(g.opponent) && (g.homeScore == 20 || g.awayScore == 20));
+                    });
+                    return db.collection('teams').doc(srcCode).collection('data').doc('games').set({
+                        items: remaining, updatedAt: now
+                    });
+                }).then(function () {
+                    // Update localStorage if active team is destination
+                    if (getActiveTeam() === dstCode) {
+                        localStorage.setItem('laxkeeper_games', JSON.stringify(dstGames));
+                        if (typeof loadGameHistory === 'function') loadGameHistory();
+                        if (typeof loadScheduledGames === 'function') loadScheduledGames();
+                    }
+                    alert('Done! Moved ' + added + ' Eastlake game(s) from ' + srcCode + ' to ' + dstCode);
+                });
+            });
+        }).catch(function (err) {
+            console.error('[LaxSync] Move game failed:', err);
+            alert('Failed: ' + err.message);
+        });
+    }
+
     function copyTeamCode(code) {
         if (!code) code = getActiveTeam();
         if (!code) return;
@@ -1080,6 +1141,7 @@ var LaxSync = (function () {
         forcePush: forcePush,
         recoverData: recoverData,
         recoverFromTeam: recoverFromTeam,
+        moveEastlakeGame: moveEastlakeGame,
         recoverGame: recoverGame,
         recoverPlayer: recoverPlayer,
         recoverAll: recoverAll,
