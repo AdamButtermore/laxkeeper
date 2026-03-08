@@ -2081,9 +2081,21 @@ function viewGameStats(gameId) {
                 <tbody>`;
 
     // Collect player rows first to find column maximums
+    // Build a combined player list: roster + any players in game.stats not in roster
+    const rosterById = {};
+    roster.forEach(p => { rosterById[p.id] = p; });
+    const allPlayers = [...roster];
+    if (game.stats) {
+        Object.keys(game.stats).forEach(pid => {
+            if (!rosterById[pid] && pid !== 'opponent') {
+                allPlayers.push({ id: pid, number: '?', name: 'Unknown (#' + pid.slice(-4) + ')', position: '' });
+            }
+        });
+    }
+
     const playerRows = [];
-    [...roster].sort((a, b) => Number(a.number) - Number(b.number)).forEach(player => {
-        const stats = game.stats[player.id];
+    [...allPlayers].sort((a, b) => Number(a.number) - Number(b.number)).forEach(player => {
+        const stats = game.stats && game.stats[player.id];
         if (!stats) return;
         const totalStats = Object.values(stats).reduce((a, b) => a + getStatCount(b), 0);
         if (totalStats === 0) return;
