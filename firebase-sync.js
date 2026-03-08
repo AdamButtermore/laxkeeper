@@ -1095,6 +1095,12 @@ var LaxSync = (function () {
                     if (g.homeScore == null) g.homeScore = 20;
                     if (g.awayScore == null) g.awayScore = 2;
                     fixed = true;
+                    var keys = Object.keys(g);
+                    info += '   Keys: ' + keys.join(', ') + '\n';
+                    info += '   Stats players: ' + (g.stats ? Object.keys(g.stats).length : 'none') + '\n';
+                    info += '   trackingTeam: ' + (g.trackingTeam || 'missing') + '\n';
+                    info += '   format: ' + (g.format || 'missing') + '\n';
+                    info += '   date: ' + (g.date || 'missing') + '\n';
                     info += '   → FIXED: status=completed, score=20-2\n';
                 }
             }
