@@ -392,6 +392,14 @@
                     <h3>Recover Data</h3>
                     <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">Scan all your teams for games or players missing from your active team.</p>
                     <button class="btn-secondary" onclick="LaxSync.recoverData()" style="width: 100%;">Scan for Missing Data</button>
+                    <div style="margin-top: 0.75rem;">
+                        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.5rem;">Import from a specific team code:</p>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" id="recover-team-code" placeholder="Team code" class="input-field" maxlength="6"
+                                   style="text-transform:uppercase; text-align:center; font-size:1.1rem; letter-spacing:0.2rem; flex:1;">
+                            <button class="btn-secondary" onclick="LaxSync.recoverFromTeam()">Scan</button>
+                        </div>
+                    </div>
                     <div id="recover-results"></div>
                 </div>
 
