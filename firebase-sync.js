@@ -617,8 +617,9 @@ var LaxSync = (function () {
                 // Set as active team
                 localStorage.setItem(ACTIVE_TEAM_KEY, code);
 
-                // Drain pending writes from old team before switching paths
+                // Drain pending writes and deferred snapshots from old team
                 pendingWrites = [];
+                deferredGamesSnapshot = null;
 
                 // Prevent stale hydration state from flushing old data to new team
                 hydrationComplete = false;
@@ -626,12 +627,12 @@ var LaxSync = (function () {
                 // Switch sync target to team path
                 switchToTeamPath(code);
 
-                // Clear local data so the new team starts completely fresh
+                // Clear ALL local data so the new team starts completely fresh
                 suppressSync = true;
                 try {
                     localStorage.removeItem('laxkeeper_roster');
                     localStorage.removeItem('laxkeeper_games');
-                    localStorage.removeItem('CURRENT_GAME');
+                    localStorage.removeItem('laxkeeper_current_game');
                     localStorage.setItem('laxkeeper_team_name', teamName);
                 } finally {
                     suppressSync = false;
