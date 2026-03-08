@@ -890,6 +890,49 @@ var LaxSync = (function () {
         recoverData(); // refresh results
     }
 
+    function forcePull() {
+        var user = firebase.auth().currentUser;
+        if (user) uid = user.uid;
+        if (!uid) { alert('You must be signed in.'); return; }
+
+        var activeCode = getActiveTeam();
+        if (!activeCode) { alert('No active team.'); return; }
+
+        if (!confirm('This will overwrite local data with what\'s in the cloud. Continue?')) return;
+
+        userDocRef = firebase.firestore().collection('teams').doc(activeCode).collection('data');
+        monkeyPatchLocalStorage();
+
+        userDocRef.get().then(function (snapshot) {
+            var cloudDocs = {};
+            snapshot.forEach(function (doc) { cloudDocs[doc.id] = doc.data(); });
+
+            suppressSync = true;
+            try {
+                if (cloudDocs.roster && cloudDocs.roster.items) {
+                    localStorage.setItem('laxkeeper_roster', JSON.stringify(cloudDocs.roster.items));
+                }
+                if (cloudDocs.games && cloudDocs.games.items) {
+                    localStorage.setItem('laxkeeper_games', JSON.stringify(cloudDocs.games.items));
+                }
+                if (cloudDocs.settings && cloudDocs.settings.teamName) {
+                    localStorage.setItem('laxkeeper_team_name', cloudDocs.settings.teamName);
+                }
+            } finally {
+                suppressSync = false;
+            }
+
+            refreshUI();
+            setupRealtimeListeners();
+
+            var gameCount = cloudDocs.games && cloudDocs.games.items ? cloudDocs.games.items.length : 0;
+            alert('Pulled cloud data: ' + gameCount + ' game(s) loaded for team ' + activeCode);
+        }).catch(function (err) {
+            console.error('[LaxSync] Force pull failed:', err);
+            alert('Pull failed: ' + err.message);
+        });
+    }
+
     function recoverFromTeam() {
         var user = firebase.auth().currentUser;
         if (user) uid = user.uid;
@@ -1139,6 +1182,7 @@ var LaxSync = (function () {
         copyTeamCode: copyTeamCode,
         switchTeam: switchTeam,
         forcePush: forcePush,
+        forcePull: forcePull,
         recoverData: recoverData,
         recoverFromTeam: recoverFromTeam,
         moveEastlakeGame: moveEastlakeGame,
