@@ -811,7 +811,16 @@ var LaxSync = (function () {
             userDocRef = null;
 
             if (teams.length > 0) {
-                // Switch to the first remaining team
+                // Switch to the first remaining team — clear local data first
+                // to prevent old team's data from contaminating the new team
+                suppressSync = true;
+                try {
+                    localStorage.removeItem('laxkeeper_roster');
+                    localStorage.removeItem('laxkeeper_games');
+                    localStorage.removeItem('laxkeeper_current_game');
+                } finally {
+                    suppressSync = false;
+                }
                 localStorage.setItem(ACTIVE_TEAM_KEY, teams[0].code);
                 userDocRef = firebase.firestore().collection('teams').doc(teams[0].code).collection('data');
                 hydrateFromFirestore().then(function () {

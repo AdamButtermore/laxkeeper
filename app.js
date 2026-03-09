@@ -61,6 +61,20 @@ let currentGame = null;
 let clockInterval = null;
 let selectedStat = null;
 
+// ===== HTML ESCAPING =====
+// Prevent XSS from user-controlled strings (player names, opponent names, etc.)
+function escapeHtml(str) {
+    if (typeof str !== 'string') return str;
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+// Escape a string for use inside an HTML attribute value (double-quoted)
+function escapeAttr(str) {
+    if (typeof str !== 'string') return str;
+    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 // ===== STAT TIMESTAMP HELPERS =====
 // Returns integer count from either old (number) or new (array) format
 function getStatCount(val) {
@@ -396,7 +410,7 @@ function deletePlayer(playerId) {
     });
 
     if (hasStats) {
-        if (!confirm(`#${player.number} ${player.name} has stats in completed games. Deleting will remove them from the roster but their historical stats will be kept.\n\nContinue?`)) return;
+        if (!confirm(`#${escapeHtml(player.number)} ${escapeHtml(player.name)} has stats in completed games. Deleting will remove them from the roster but their historical stats will be kept.\n\nContinue?`)) return;
     } else {
         if (!confirm('Are you sure you want to delete this player?')) return;
     }
@@ -415,9 +429,9 @@ function editPlayer(playerId) {
     row.classList.add('player-item-editing');
     row.innerHTML = `
         <div class="player-edit-form">
-            <input type="text" id="edit-name-${playerId}" value="${player.name}" class="input-field" placeholder="Name">
+            <input type="text" id="edit-name-${playerId}" value="${escapeAttr(player.name)}" class="input-field" placeholder="Name">
             <div class="player-edit-row">
-                <input type="number" id="edit-number-${playerId}" value="${player.number}" class="input-field" placeholder="#">
+                <input type="number" id="edit-number-${playerId}" value="${escapeAttr(player.number)}" class="input-field" placeholder="#">
                 <select id="edit-position-${playerId}" class="input-field">
                     <option value="Attack"${player.position === 'Attack' ? ' selected' : ''}>Attack</option>
                     <option value="Midfield"${player.position === 'Midfield' ? ' selected' : ''}>Midfield</option>
@@ -489,9 +503,9 @@ function loadRoster() {
     display.innerHTML = roster.map(player => `
         <div class="player-item" id="player-row-${player.id}">
             <div class="player-info">
-                <span class="player-number">#${player.number}</span>
-                <strong>${player.name}</strong>
-                <div class="player-position">${player.position}</div>
+                <span class="player-number">#${escapeHtml(player.number)}</span>
+                <strong>${escapeHtml(player.name)}</strong>
+                <div class="player-position">${escapeHtml(player.position)}</div>
             </div>
             <div class="player-actions">
                 <button class="edit-btn" onclick="editPlayer('${player.id}')">Edit</button>
@@ -581,9 +595,9 @@ function loadScheduledGames() {
         const date = new Date(game.datetime);
         return `
             <div class="game-card" onclick="startScheduledGame('${game.id}')">
-                <h4>vs ${game.opponent}</h4>
+                <h4>vs ${escapeHtml(game.opponent)}</h4>
                 <p>📅 ${date.toLocaleDateString()} at ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                ${game.location ? `<p>📍 ${game.location}</p>` : ''}
+                ${game.location ? `<p>📍 ${escapeHtml(game.location)}</p>` : ''}
                 <p>⏱️ ${game.format === 'quarters' ? '4 Quarters' : '2 Halves'} × ${game.periodDuration} min${game.clockType === 'running' ? ' (running)' : ' (stop)'}${game.gameType === 'girls' ? ' (Girls)' : ''}</p>
             </div>
         `;
@@ -608,9 +622,9 @@ function loadGamesList() {
         const date = new Date(game.datetime);
         return `
             <div class="game-card" onclick="startScheduledGame('${game.id}')">
-                <h4>vs ${game.opponent}</h4>
+                <h4>vs ${escapeHtml(game.opponent)}</h4>
                 <p>📅 ${date.toLocaleDateString()} at ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                ${game.location ? `<p>📍 ${game.location}</p>` : ''}
+                ${game.location ? `<p>📍 ${escapeHtml(game.location)}</p>` : ''}
                 <p>⏱️ ${game.format === 'quarters' ? '4 Quarters' : '2 Halves'} × ${game.periodDuration} min${game.clockType === 'running' ? ' (running)' : ' (stop)'}${game.gameType === 'girls' ? ' (Girls)' : ''}</p>
             </div>
         `;
@@ -994,8 +1008,8 @@ function loadPlayerButtons() {
 
     container.innerHTML = roster.map(player => `
         <button class="player-btn" onclick="selectPlayerForStat('${player.id}')">
-            <div class="player-btn-number">${player.number}</div>
-            <div class="player-btn-name">${player.name.split(' ')[0]}</div>
+            <div class="player-btn-number">${escapeHtml(player.number)}</div>
+            <div class="player-btn-name">${escapeHtml(player.name.split(' ')[0])}</div>
         </button>
     `).join('');
 }
@@ -1182,8 +1196,8 @@ function promptForAssist(goalScorerId, goalTimestamp) {
         const btn = document.createElement('button');
         btn.className = 'player-btn';
         btn.innerHTML = `
-            <div class="player-btn-number">${player.number}</div>
-            <div class="player-btn-name">${player.name.split(' ')[0]}</div>
+            <div class="player-btn-number">${escapeHtml(player.number)}</div>
+            <div class="player-btn-name">${escapeHtml(player.name.split(' ')[0])}</div>
         `;
         btn.onclick = () => {
             const assistTs = goalTimestamp || recordStatTimestamp();
@@ -1306,7 +1320,7 @@ function toggleStatsView() {
         hasPlayerStats = true;
         statsHtml += `
             <tr>
-                <td>#${player.number} ${player.name}</td>
+                <td>#${escapeHtml(player.number)} ${escapeHtml(player.name)}</td>
                 <td>${goals}</td>
                 <td>${assists}</td>
                 <td style="font-weight: 600;">${points}</td>
@@ -1594,7 +1608,7 @@ function buildGameLog() {
     for (const playerId of Object.keys(currentGame.stats)) {
         const playerStats = currentGame.stats[playerId];
         const player = roster.find(p => p.id === playerId);
-        const playerLabel = player ? `#${player.number} ${player.name}` : `Player ${playerId}`;
+        const playerLabel = player ? `#${escapeHtml(player.number)} ${escapeHtml(player.name)}` : `Player ${playerId}`;
 
         for (const statType of Object.keys(playerStats)) {
             const val = playerStats[statType];
@@ -1747,7 +1761,7 @@ function reassignStat(statType, index, oldPlayerId, overlay, refreshFn) {
     roster.forEach(player => {
         if (player.id === oldPlayerId) return; // skip current player
         const btn = document.createElement('button');
-        btn.textContent = `#${player.number} ${player.name}`;
+        btn.textContent = `#${escapeHtml(player.number)} ${escapeHtml(player.name)}`;
         btn.className = 'picker-btn';
         btn.onclick = () => {
             const newPlayerId = player.id;
@@ -1937,7 +1951,7 @@ function loadGameHistory() {
 
         return `
             <div class="history-item">
-                <h4>vs ${game.opponent}</h4>
+                <h4>vs ${escapeHtml(game.opponent)}</h4>
                 <div class="history-score" style="color: ${resultColor}">
                     ${result} ${game.homeScore} - ${game.awayScore}
                 </div>
@@ -1958,7 +1972,7 @@ function deleteGame(gameId) {
     const game = games.find(g => g.id === gameId);
     if (!game) return;
 
-    const label = `vs ${game.opponent} (${game.homeScore}-${game.awayScore})`;
+    const label = `vs ${escapeHtml(game.opponent)} (${game.homeScore}-${game.awayScore})`;
 
     if (!confirm(`Delete the game ${label}?\n\nThis will permanently remove all stats from this game.`)) return;
     if (!confirm(`Are you REALLY sure?\n\nAll player stats for ${label} will be gone forever.`)) return;
@@ -1992,7 +2006,7 @@ function moveGameToTeam(gameId) {
     content.className = 'overlay-content overlay-content--narrow';
     content.innerHTML = `<h3 style="margin-bottom:1rem;text-align:center;">Move Game</h3>
         <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;text-align:center;">
-            Move <strong>vs ${game.opponent}</strong> to which team?
+            Move <strong>vs ${escapeHtml(game.opponent)}</strong> to which team?
         </p>`;
 
     otherTeams.forEach(team => {
@@ -2053,7 +2067,7 @@ function editGameStats(gameId) {
         'Turnovers', 'Takeaways', 'Saves', 'Penalties'];
 
     let html = '<div class="overlay-content overlay-content--medium">';
-    html += `<h3>Edit Stats: vs ${game.opponent}</h3>`;
+    html += `<h3>Edit Stats: vs ${escapeHtml(game.opponent)}</h3>`;
 
     // Editable score
     html += '<div style="display: flex; gap: 1rem; align-items: center; margin: 1rem 0;">';
@@ -2078,7 +2092,7 @@ function editGameStats(gameId) {
         if (!stats) return;
 
         html += `<tr>`;
-        html += `<td>#${player.number} ${player.name}</td>`;
+        html += `<td>#${escapeHtml(player.number)} ${escapeHtml(player.name)}</td>`;
         statKeys.forEach(key => {
             const val = getStatCount(stats[key]);
             html += `<td style="padding: 0.25rem;">`;
@@ -2284,7 +2298,7 @@ function renderPlayerStatsTable(game, roster) {
 
     playerRows.forEach(r => {
         html += `<tr>
-            <td>#${r.player.number} ${r.player.name}</td>
+            <td>#${escapeHtml(r.player.number)} ${escapeHtml(r.player.name)}</td>
             <td style="${grn(r.goals,'goals')}">${r.goals}</td>
             <td style="${grn(r.assists,'assists')}">${r.assists}</td>
             <td style="font-weight: 600; ${grn(r.points,'points')}">${r.points}</td>
@@ -2362,7 +2376,7 @@ function viewGameStats(gameId) {
 
     const roster = getRoster();
     let statsHtml = '<div class="overlay-content overlay-content--wide">';
-    statsHtml += `<h3>vs ${game.opponent}</h3>`;
+    statsHtml += `<h3>vs ${escapeHtml(game.opponent)}</h3>`;
     statsHtml += `<p style="font-size: 1.5rem; font-weight: bold; margin: 1rem 0;">Score: ${game.homeScore} - ${game.awayScore}</p>`;
 
     const gameDate = game.completedAt ? new Date(game.completedAt) : null;
@@ -2394,7 +2408,7 @@ function viewGameStats(gameId) {
                                 period: entry.period,
                                 time: entry.time || '',
                                 timeRemaining: entry.timeRemaining != null ? entry.timeRemaining : 0,
-                                label: `#${player.number} ${player.name}`,
+                                label: `#${escapeHtml(player.number)} ${escapeHtml(player.name)}`,
                                 stat: statNames[statKey] || statKey,
                                 statKey: statKey,
                                 isGoal: statKey === 'goal',
@@ -2507,7 +2521,7 @@ function viewGameStats(gameId) {
                 ps.shot.forEach(shotTs => {
                     if (shotTs && typeof shotTs.x === 'number' && typeof shotTs.y === 'number') {
                         const isGoal = goalTimestamps.some(gTs => gTs.period === shotTs.period && gTs.timeRemaining === shotTs.timeRemaining);
-                        shotChartData.push({ x: shotTs.x, y: shotTs.y, isGoal, playerId, playerLabel: `#${player.number} ${player.name}` });
+                        shotChartData.push({ x: shotTs.x, y: shotTs.y, isGoal, playerId, playerLabel: `#${escapeHtml(player.number)} ${escapeHtml(player.name)}` });
                     }
                 });
             });
@@ -2685,7 +2699,7 @@ function loadSeasonSummary() {
         const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
         const result = game.homeScore > game.awayScore ? 'W' : game.homeScore < game.awayScore ? 'L' : 'T';
         const resultColor = result === 'W' ? '#10b981' : result === 'L' ? '#ef4444' : '#94a3b8';
-        const label = `<span style="color: ${resultColor}; font-weight: 700;">${result}</span> vs ${game.opponent}<br><span style="font-size: 0.75rem; color: var(--text-secondary);">${dateStr}</span>`;
+        const label = `<span style="color: ${resultColor}; font-weight: 700;">${result}</span> vs ${escapeHtml(game.opponent)}<br><span style="font-size: 0.75rem; color: var(--text-secondary);">${dateStr}</span>`;
         const score = `<span style="color: ${resultColor};">${game.homeScore}-${game.awayScore}</span>`;
         const bg = i % 2 === 0 ? '' : 'rgba(255,255,255,0.02)';
         html += statRow(label, score, t, bg);
@@ -2754,7 +2768,7 @@ function loadSeasonSummary() {
             const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
             const result = game.homeScore > game.awayScore ? 'W' : game.homeScore < game.awayScore ? 'L' : 'T';
             const resultColor = result === 'W' ? '#10b981' : result === 'L' ? '#ef4444' : '#94a3b8';
-            const label = `<span style="color: ${resultColor}; font-weight: 700;">${result}</span> vs ${game.opponent}<br><span style="font-size: 0.75rem; color: var(--text-secondary);">${dateStr}</span>`;
+            const label = `<span style="color: ${resultColor}; font-weight: 700;">${result}</span> vs ${escapeHtml(game.opponent)}<br><span style="font-size: 0.75rem; color: var(--text-secondary);">${dateStr}</span>`;
             const bg = i % 2 === 0 ? '' : 'rgba(255,255,255,0.02)';
 
             if (hasData) {
@@ -2865,7 +2879,7 @@ function loadSeasonSummary() {
     sortedPlayers.forEach((s, i) => {
         const bg = i % 2 === 0 ? '' : 'background: rgba(255,255,255,0.02);';
         html += `<tr style="border-bottom: 1px solid var(--border-color); ${bg}">
-            <td style="${stickyTd} ${bg}">#${s.player.number} ${s.player.name}</td>
+            <td style="${stickyTd} ${bg}">#${escapeHtml(s.player.number)} ${escapeHtml(s.player.name)}</td>
             <td style="${tdStyle}">${s.gamesPlayed}</td>
             <td style="${tdStyle} ${grn(s.totalGoals,'totalGoals')}">${s.totalGoals}</td>
             <td style="${tdStyle} ${grn(s.totalAssists,'totalAssists')}">${s.totalAssists}</td>
@@ -2902,7 +2916,7 @@ function loadSeasonSummary() {
         const avg = (v) => gp > 0 ? (v / gp).toFixed(1) : '0.0';
         const bg = i % 2 === 0 ? '' : 'background: rgba(255,255,255,0.02);';
         html += `<tr style="border-bottom: 1px solid var(--border-color); ${bg}">
-            <td style="${stickyTd} ${bg}">#${s.player.number} ${s.player.name}</td>
+            <td style="${stickyTd} ${bg}">#${escapeHtml(s.player.number)} ${escapeHtml(s.player.name)}</td>
             <td style="${tdStyle}">${gp}</td>
             <td style="${tdStyle}">${avg(s.totalGoals)}</td>
             <td style="${tdStyle}">${avg(s.totalAssists)}</td>
@@ -2923,7 +2937,7 @@ function loadSeasonSummary() {
     html += `<select id="player-gamelog-select" onchange="renderPlayerGameLog()" style="width: 100%; padding: 0.75rem; font-size: 1rem; border-radius: 8px; border: 2px solid var(--border-color); background: var(--bg-color); color: var(--text-primary); margin-bottom: 1rem; cursor: pointer;">`;
     html += `<option value="">Select a player...</option>`;
     sortedPlayers.forEach(s => {
-        html += `<option value="${s.player.id}">#${s.player.number} ${s.player.name}</option>`;
+        html += `<option value="${s.player.id}">#${escapeHtml(s.player.number)} ${escapeHtml(s.player.name)}</option>`;
     });
     html += `</select>`;
     html += `<div id="player-gamelog-table"></div>`;
@@ -2941,7 +2955,7 @@ function loadSeasonSummary() {
             ps.shot.forEach(shotTs => {
                 if (shotTs && typeof shotTs.x === 'number' && typeof shotTs.y === 'number') {
                     const isGoal = goalTimestamps.some(gTs => gTs.period === shotTs.period && gTs.timeRemaining === shotTs.timeRemaining);
-                    seasonShotData.push({ x: shotTs.x, y: shotTs.y, isGoal, playerId, playerLabel: `#${player.number} ${player.name}` });
+                    seasonShotData.push({ x: shotTs.x, y: shotTs.y, isGoal, playerId, playerLabel: `#${escapeHtml(player.number)} ${escapeHtml(player.name)}` });
                 }
             });
         });
@@ -3014,6 +3028,9 @@ function renderPlayerGameLog() {
     const player = roster.find(p => p.id === playerId);
     if (!player) { container.innerHTML = ''; return; }
 
+    // Determine predominant game type for column labels
+    const _seasonGt = games.filter(g => g.gameType === 'girls').length > games.length / 2 ? 'girls' : 'boys';
+
     const thStyle = 'padding: 0.6rem 0.5rem; text-align: center; font-weight: 700;';
     const tdStyle = 'padding: 0.6rem 0.5rem; text-align: center; color: var(--text-primary);';
     const stickyTh = thStyle + ' text-align: left; position: sticky; left: 0; z-index: 1; background: var(--warning-color);';
@@ -3052,7 +3069,7 @@ function renderPlayerGameLog() {
         const bg = i % 2 === 0 ? '' : 'background: rgba(255,255,255,0.02);';
 
         html += `<tr style="border-bottom: 1px solid var(--border-color); ${bg}">
-            <td style="${stickyTd} ${bg}"><span style="color: ${resultColor}; font-weight: 700;">${result}</span> vs ${game.opponent}<br><span style="font-size: 0.75rem; color: var(--text-secondary);">${dateStr}</span></td>
+            <td style="${stickyTd} ${bg}"><span style="color: ${resultColor}; font-weight: 700;">${result}</span> vs ${escapeHtml(game.opponent)}<br><span style="font-size: 0.75rem; color: var(--text-secondary);">${dateStr}</span></td>
             <td style="${tdStyle} font-weight: 600;"><span style="color: ${resultColor};">${game.homeScore}-${game.awayScore}</span></td>
             <td style="${tdStyle}">${g}</td><td style="${tdStyle}">${a}</td><td style="${tdStyle} font-weight: 700;">${pts}</td>
             <td style="${tdStyle}">${sh}</td><td style="${tdStyle}">${shPct}</td><td style="${tdStyle}">${gb}</td>
@@ -3174,7 +3191,7 @@ function exportCSV() {
 
             rows.push([
                 player.name, player.number, player.position || '',
-                `vs ${game.opponent}`, dateStr, result, score,
+                `vs ${escapeHtml(game.opponent)}`, dateStr, result, score,
                 g, a, pts, sh, shPct + '%', gb, fow, fol, foPct + '%', to, ta, sv, pen
             ]);
         });
@@ -3238,7 +3255,7 @@ function exportCSV() {
 
             const p = (n, d) => d > 0 ? Math.round(n / d * 100) + '%' : '-';
             rows.push([
-                `vs ${game.opponent}`, dateStr, result, score,
+                `vs ${escapeHtml(game.opponent)}`, dateStr, result, score,
                 ts.clearsSuccess, ts.clearsFail, p(ts.clearsSuccess, clrT),
                 ts.oppClearsSuccess, ts.oppClearsFail, p(ts.oppClearsSuccess, oClrT),
                 ts.emoGoals, ts.emoOpportunities, p(ts.emoGoals, ts.emoOpportunities),
@@ -3333,7 +3350,7 @@ function showPenaltyTimeSelector(playerId) {
 
     overlay.innerHTML = `
         <h2 style="color: #FF1744; margin-bottom: 1rem; font-size: 1.8rem;">Penalty Time</h2>
-        <h3 style="color: white; margin-bottom: 2rem;">#${player.number} ${player.name}</h3>
+        <h3 style="color: white; margin-bottom: 2rem;">#${escapeHtml(player.number)} ${escapeHtml(player.name)}</h3>
         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; width: 100%; max-width: 400px;">
             <button class="penalty-time-btn" data-seconds="30">30 sec</button>
             <button class="penalty-time-btn" data-seconds="60">1 min</button>
@@ -3962,7 +3979,7 @@ function executeVoiceCommand(parsed, { silent = false } = {}) {
         // Handle penalty - open time selector
         if (parsed.stat === 'penalty') {
             if (!silent) {
-                showVoiceFeedback('Select penalty time', `Penalty for #${player.number} ${player.name}`);
+                showVoiceFeedback('Select penalty time', `Penalty for #${escapeHtml(player.number)} ${escapeHtml(player.name)}`);
                 setTimeout(() => {
                     hideVoiceFeedback();
                     showPenaltyTimeSelector(player.id);

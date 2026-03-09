@@ -109,6 +109,14 @@ function signOutUser() {
     firebase.auth().signOut().then(function () {
         console.log('[Firebase] Signed out');
         window.firebaseUser = null;
+
+        // Clear all user/team data from localStorage to prevent next user seeing it
+        localStorage.removeItem('laxkeeper_roster');
+        localStorage.removeItem('laxkeeper_games');
+        localStorage.removeItem('laxkeeper_current_game');
+        localStorage.removeItem('laxkeeper_team_name');
+        localStorage.removeItem('laxkeeper_user_teams');
+        localStorage.removeItem('laxkeeper_active_team');
     }).catch(function (err) {
         console.error('[Firebase] Sign-out failed:', err);
     });
