@@ -160,6 +160,18 @@
 
                     <input type="text" id="game-location" placeholder="Location" class="input-field">
 
+                    <h3>Game Type</h3>
+                    <div class="radio-group">
+                        <label>
+                            <input type="radio" name="game-type" value="boys" checked onchange="applyGameTypeDefaults()">
+                            Boys Lacrosse
+                        </label>
+                        <label>
+                            <input type="radio" name="game-type" value="girls" onchange="applyGameTypeDefaults()">
+                            Girls Lacrosse
+                        </label>
+                    </div>
+
                     <h3>Game Format</h3>
                     <div class="radio-group">
                         <label>
@@ -266,8 +278,8 @@
                 <h3>Select Stat to Record</h3>
                 <div id="stat-buttons" class="stat-buttons">
                     <div class="stat-grid">
-                        <button class="stat-btn" onclick="selectStat('faceoff-won')">Faceoff Won</button>
-                        <button class="stat-btn" onclick="selectStat('faceoff-lost')">Faceoff Lost</button>
+                        <button class="stat-btn" id="btn-faceoff-won" onclick="selectStat('faceoff-won')">Faceoff Won</button>
+                        <button class="stat-btn" id="btn-faceoff-lost" onclick="selectStat('faceoff-lost')">Faceoff Lost</button>
                         <button class="stat-btn" onclick="selectStat('ground-ball')">Ground Ball</button>
                         <button class="stat-btn" onclick="selectStat('shot')">Shot</button>
                         <button class="stat-btn" onclick="selectStat('goal')">Goal</button>
@@ -441,6 +453,8 @@
                             <code>"Ground ball 22"</code>
                             <code>"Faceoff win 14"</code>
                             <code>"Faceoff loss 14"</code>
+                            <code>"Draw win 14"</code>
+                            <code>"Draw loss 14"</code>
                             <code>"Turnover 5"</code>
                             <code>"Takeaway 8"</code>
                             <code>"Penalty 3"</code>
@@ -522,17 +536,18 @@
                         <h4>Ground Ball (GB)</h4>
                         <p>A ground ball is awarded when a player picks up a <strong>loose ball</strong> off the ground and gains possession — meaning they can immediately pass, shoot, or cradle.</p>
                         <div class="about-detail">The ball must be <strong>contested</strong> — if a player scoops an uncontested ball with no opponent nearby, it's generally not a ground ball.</div>
-                        <div class="about-detail">After a faceoff, the player who wins possession gets a ground ball (along with the faceoff win).</div>
+                        <div class="about-detail">After a faceoff (or draw), the player who wins possession gets a ground ball (along with the faceoff/draw win).</div>
                         <div class="about-detail"><strong>Voice:</strong> <code>"Ground ball 22"</code></div>
                     </div>
 
                     <div class="about-card">
-                        <h4>Faceoff Won / Lost (FOW / FOL)</h4>
-                        <p>A faceoff happens at the start of each period and after every goal. Two players crouch at the center X and fight for possession when the whistle blows.</p>
-                        <div class="about-detail"><strong>Faceoff Won:</strong> The faceoff player (or their wing) gains first possession. Credit the faceoff specialist, not the wing player who may scoop it up.</div>
-                        <div class="about-detail"><strong>Faceoff Lost:</strong> The opponent gains first possession from the faceoff.</div>
-                        <div class="about-detail"><strong>FO%</strong> (Faceoff Win %) = Faceoffs Won / Total Faceoffs. This is one of the most important team stats in lacrosse — controlling faceoffs means controlling possession.</div>
-                        <div class="about-detail"><strong>Voice:</strong> <code>"Faceoff win 14"</code> or <code>"Faceoff loss 14"</code></div>
+                        <h4>Faceoff / Draw Control (FOW / DCW)</h4>
+                        <p><strong>Boys:</strong> A faceoff happens at the start of each period and after every goal. Two players crouch at the center X and fight for possession when the whistle blows.</p>
+                        <p><strong>Girls:</strong> A draw control takes place at center circle — two players hold their sticks back-to-back at waist height and the ball is placed between them. On the whistle, both pull up and away to win possession.</p>
+                        <div class="about-detail"><strong>Won:</strong> Your player (or their wing) gains first possession. Credit the specialist, not the wing who may scoop it up.</div>
+                        <div class="about-detail"><strong>Lost:</strong> The opponent gains first possession.</div>
+                        <div class="about-detail"><strong>FO% / DC%</strong> = Wins / Total. One of the most important team stats — controlling restarts means controlling possession.</div>
+                        <div class="about-detail"><strong>Voice:</strong> <code>"Faceoff win 14"</code> or <code>"Draw win 14"</code> (both work)</div>
                     </div>
 
                     <div class="about-card">
@@ -748,6 +763,7 @@
                             <code>"Opponent goal"</code>
                             <code>"Save 1"</code>
                             <code>"Faceoff win 14"</code>
+                            <code>"Draw win 14"</code>
                             <code>"Takeaway 8"</code>
                         </div>
                         <p>Voice input uses fuzzy matching and handles common mishearings — you don't need to be exact. An undo button appears after each voice command in case of errors.</p>
@@ -857,7 +873,7 @@
                     </div>
                     <div class="about-card">
                         <h4>Season Summary</h4>
-                        <p>Aggregates every player's stats across all completed games — totals, shooting percentage, faceoff win rate, per-game averages, and more. Leaders are highlighted in green.</p>
+                        <p>Aggregates every player's stats across all completed games — totals, shooting percentage, faceoff/draw win rate, per-game averages, and more. Leaders are highlighted in green.</p>
                     </div>
                 </div>
 

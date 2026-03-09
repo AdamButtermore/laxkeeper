@@ -7,6 +7,55 @@ const STORAGE_KEYS = {
     CURRENT_GAME: 'laxkeeper_current_game'
 };
 
+// ===== GAME TYPE HELPERS (boys vs girls lacrosse) =====
+// Returns display labels that differ between boys and girls lacrosse.
+// The underlying stat keys ('faceoff-won', 'faceoff-lost') stay the same for data compatibility.
+function getFaceoffLabel(gameType, which) {
+    if (gameType === 'girls') {
+        return which === 'won' ? 'Draw Won' : 'Draw Lost';
+    }
+    return which === 'won' ? 'Faceoff Won' : 'Faceoff Lost';
+}
+function getFaceoffAbbrev(gameType, which) {
+    if (gameType === 'girls') {
+        return which === 'won' ? 'DCW' : 'DCL';
+    }
+    return which === 'won' ? 'FOW' : 'FOL';
+}
+function getFaceoffPctLabel(gameType) {
+    return gameType === 'girls' ? 'DC%' : 'FO%';
+}
+function getFaceoffPctLabelLong(gameType) {
+    return gameType === 'girls' ? 'DC Win %' : 'FO Win %';
+}
+// Returns the stat display name map, adjusted for game type
+function getStatNames(gameType) {
+    return {
+        'faceoff-won': getFaceoffLabel(gameType, 'won'),
+        'faceoff-lost': getFaceoffLabel(gameType, 'lost'),
+        'ground-ball': 'Ground Ball',
+        'shot': 'Shot',
+        'goal': 'Goal',
+        'assist': 'Assist',
+        'turnover': 'Turnover',
+        'caused-turnover': 'Takeaway',
+        'save': 'Save',
+        'penalty': 'Penalty'
+    };
+}
+// Get the gameType for the current or provided game, defaulting to 'boys'
+function getGameType(game) {
+    return (game && game.gameType) || 'boys';
+}
+// Create a fresh player stats object
+function newPlayerStats() {
+    return {
+        'faceoff-won': [], 'faceoff-lost': [], 'ground-ball': [],
+        'shot': [], 'goal': [], 'assist': [], 'turnover': [],
+        'caused-turnover': [], 'save': [], 'penalty': []
+    };
+}
+
 // Global State
 let currentGame = null;
 let clockInterval = null;
@@ -445,11 +494,23 @@ function loadRoster() {
 }
 
 // ===== GAME SCHEDULING =====
+function applyGameTypeDefaults() {
+    const gameType = document.querySelector('input[name="game-type"]:checked').value;
+    if (gameType === 'girls') {
+        document.querySelector('input[name="game-format"][value="halves"]').checked = true;
+        document.getElementById('period-duration').value = '25';
+    } else {
+        document.querySelector('input[name="game-format"][value="quarters"]').checked = true;
+        document.getElementById('period-duration').value = '12';
+    }
+}
+
 function scheduleGame() {
     const opponent = document.getElementById('opponent-name').value.trim();
     const gameDate = document.getElementById('game-date').value;
     const gameTime = document.getElementById('game-time').value;
     const location = document.getElementById('game-location').value.trim();
+    const gameType = document.querySelector('input[name="game-type"]:checked').value;
     const format = document.querySelector('input[name="game-format"]:checked').value;
     const clockType = document.querySelector('input[name="clock-type"]:checked').value;
     const periodDuration = parseInt(document.getElementById('period-duration').value);
@@ -468,6 +529,7 @@ function scheduleGame() {
         opponent,
         datetime,
         location,
+        gameType,
         format,
         clockType,
         periodDuration,
@@ -514,7 +576,7 @@ function loadScheduledGames() {
                 <h4>vs ${game.opponent}</h4>
                 <p>📅 ${date.toLocaleDateString()} at ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                 ${game.location ? `<p>📍 ${game.location}</p>` : ''}
-                <p>⏱️ ${game.format === 'quarters' ? '4 Quarters' : '2 Halves'} × ${game.periodDuration} min${game.clockType === 'running' ? ' (running)' : ' (stop)'}</p>
+                <p>⏱️ ${game.format === 'quarters' ? '4 Quarters' : '2 Halves'} × ${game.periodDuration} min${game.clockType === 'running' ? ' (running)' : ' (stop)'}${game.gameType === 'girls' ? ' (Girls)' : ''}</p>
             </div>
         `;
     }).join('');
@@ -541,7 +603,7 @@ function loadGamesList() {
                 <h4>vs ${game.opponent}</h4>
                 <p>📅 ${date.toLocaleDateString()} at ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                 ${game.location ? `<p>📍 ${game.location}</p>` : ''}
-                <p>⏱️ ${game.format === 'quarters' ? '4 Quarters' : '2 Halves'} × ${game.periodDuration} min${game.clockType === 'running' ? ' (running)' : ' (stop)'}</p>
+                <p>⏱️ ${game.format === 'quarters' ? '4 Quarters' : '2 Halves'} × ${game.periodDuration} min${game.clockType === 'running' ? ' (running)' : ' (stop)'}${game.gameType === 'girls' ? ' (Girls)' : ''}</p>
             </div>
         `;
     }).join('');
@@ -636,18 +698,7 @@ function initializeGame(game, roster, trackingTeam, trackingTeamName) {
 
     // Initialize stats for each player
     roster.forEach(player => {
-        currentGame.stats[player.id] = {
-            'faceoff-won': [],
-            'faceoff-lost': [],
-            'ground-ball': [],
-            'shot': [],
-            'goal': [],
-            'assist': [],
-            'turnover': [],
-            'caused-turnover': [],
-            'save': [],
-            'penalty': []
-        };
+        currentGame.stats[player.id] = newPlayerStats();
     });
 
     // Save current game
@@ -704,6 +755,13 @@ function loadGameScreen() {
     if (opponentBtn) {
         opponentBtn.textContent = opponentName;
     }
+
+    // Update stat button labels for game type (boys vs girls)
+    const gt = getGameType(currentGame);
+    const btnFOW = document.getElementById('btn-faceoff-won');
+    const btnFOL = document.getElementById('btn-faceoff-lost');
+    if (btnFOW) btnFOW.textContent = getFaceoffLabel(gt, 'won');
+    if (btnFOL) btnFOL.textContent = getFaceoffLabel(gt, 'lost');
 
     // Initialize voice recognition
     initVoiceRecognition();
@@ -937,19 +995,8 @@ function loadPlayerButtons() {
 function selectStat(statType) {
     selectedStat = statType;
 
-    // Format stat name for display
-    const statNames = {
-        'faceoff-won': 'Faceoff Won',
-        'faceoff-lost': 'Faceoff Lost',
-        'ground-ball': 'Ground Ball',
-        'shot': 'Shot',
-        'goal': 'Goal',
-        'assist': 'Assist',
-        'turnover': 'Turnover',
-        'caused-turnover': 'Takeaway',
-        'save': 'Save',
-        'penalty': 'Penalty'
-    };
+    // Format stat name for display (game-type aware)
+    const statNames = getStatNames(getGameType(currentGame));
 
     document.getElementById('selected-stat-name').textContent = statNames[statType];
 
@@ -1208,6 +1255,7 @@ function toggleStatsView() {
     const teamName = localStorage.getItem(STORAGE_KEYS.TEAM_NAME) || 'Home';
     const opponentName = currentGame.trackingTeam === 'home' ? currentGame.opponent : teamName;
 
+    const _gt = getGameType(currentGame);
     let statsHtml = '<div class="overlay-content">';
     statsHtml += '<h3 style="margin-bottom: 1rem;">Game Statistics</h3>';
 
@@ -1225,8 +1273,8 @@ function toggleStatsView() {
                         <th>Pts</th>
                         <th>Sh</th>
                         <th>GB</th>
-                        <th>FOW</th>
-                        <th>FOL</th>
+                        <th>${getFaceoffAbbrev(_gt, 'won')}</th>
+                        <th>${getFaceoffAbbrev(_gt, 'lost')}</th>
                         <th>TO</th>
                         <th>TA</th>
                         <th>Sv</th>
@@ -1286,7 +1334,7 @@ function toggleStatsView() {
             statsHtml += `<div style="margin-top: 0.5rem; font-size: 0.9rem;">`;
             statsHtml += `Goals: ${goals} | Assists: ${assists} | Points: ${goals + assists} | `;
             statsHtml += `Shots: ${getStatCount(oppStats.shot)} | GB: ${getStatCount(oppStats['ground-ball'])} | `;
-            statsHtml += `FO Won: ${getStatCount(oppStats['faceoff-won'])} | FO Lost: ${getStatCount(oppStats['faceoff-lost'])} | `;
+            statsHtml += `${getFaceoffAbbrev(_gt, 'won')}: ${getStatCount(oppStats['faceoff-won'])} | ${getFaceoffAbbrev(_gt, 'lost')}: ${getStatCount(oppStats['faceoff-lost'])} | `;
             statsHtml += `Turnovers: ${getStatCount(oppStats.turnover)} | Takeaways: ${getStatCount(oppStats['caused-turnover'])} | `;
             statsHtml += `Saves: ${getStatCount(oppStats.save)} | Penalties: ${getStatCount(oppStats.penalty)}`;
             statsHtml += `</div></div>`;
@@ -1532,12 +1580,7 @@ function buildGameLog() {
     const pLabel = getPeriodLabel(currentGame);
     const entries = [];
 
-    const statDisplayNames = {
-        'goal': 'Goal', 'assist': 'Assist', 'shot': 'Shot',
-        'ground-ball': 'Ground Ball', 'faceoff-won': 'Faceoff Won',
-        'faceoff-lost': 'Faceoff Lost', 'turnover': 'Turnover',
-        'caused-turnover': 'Caused Turnover', 'save': 'Save', 'penalty': 'Penalty'
-    };
+    const statDisplayNames = getStatNames(getGameType(currentGame));
 
     // Player stats
     for (const playerId of Object.keys(currentGame.stats)) {
@@ -1703,11 +1746,7 @@ function reassignStat(statType, index, oldPlayerId, overlay, refreshFn) {
 
             // Initialize stats for new player if needed
             if (!currentGame.stats[newPlayerId]) {
-                currentGame.stats[newPlayerId] = {
-                    'faceoff-won': [], 'faceoff-lost': [], 'ground-ball': [],
-                    'shot': [], 'goal': [], 'assist': [], 'turnover': [],
-                    'caused-turnover': [], 'save': [], 'penalty': []
-                };
+                currentGame.stats[newPlayerId] = newPlayerStats();
             }
 
             const oldArr = currentGame.stats[oldPlayerId][statType];
@@ -1998,8 +2037,12 @@ function editGameStats(gameId) {
     if (!game) return;
 
     const roster = getRoster();
+    const _gt = getGameType(game);
     const statKeys = ['goal', 'assist', 'shot', 'ground-ball', 'faceoff-won', 'faceoff-lost', 'turnover', 'caused-turnover', 'save', 'penalty'];
-    const statLabels = ['Goals', 'Assists', 'Shots', 'Ground Balls', 'Faceoff Wins', 'Faceoff Losses', 'Turnovers', 'Takeaways', 'Saves', 'Penalties'];
+    const statLabels = ['Goals', 'Assists', 'Shots', 'Ground Balls',
+        getFaceoffLabel(_gt, 'won').replace('Won', 'Wins'),
+        getFaceoffLabel(_gt, 'lost').replace('Lost', 'Losses'),
+        'Turnovers', 'Takeaways', 'Saves', 'Penalties'];
 
     let html = '<div class="overlay-content overlay-content--medium">';
     html += `<h3>Edit Stats: vs ${game.opponent}</h3>`;
@@ -2227,7 +2270,7 @@ function renderPlayerStatsTable(game, roster) {
     let html = '<h4 style="margin-top: 1rem;">Player Statistics</h4>';
     html += `<div style="overflow-x: auto;"><table class="stat-table stat-table-sticky" style="margin-top: 0.5rem;"><thead><tr>
         <th>Player</th><th>Goals</th><th>Assists</th><th>Points</th><th>Shots</th><th>Shot %</th>
-        <th>Ground Balls</th><th>Faceoff Wins</th><th>Faceoff Losses</th><th>FO Win %</th>
+        <th>Ground Balls</th><th>${getFaceoffLabel(getGameType(game), 'won').replace('Won','Wins')}</th><th>${getFaceoffLabel(getGameType(game), 'lost').replace('Lost','Losses')}</th><th>${getFaceoffPctLabel(getGameType(game))}</th>
         <th>Turnovers</th><th>Takeaways</th><th>Saves</th><th>Penalties</th><th>PIM</th>
     </tr></thead><tbody>`;
 
@@ -2325,12 +2368,7 @@ function viewGameStats(gameId) {
 
     // === GAME LOG (chronological event list) ===
     const gameLogEvents = [];
-    const statNames = {
-        'faceoff-won': 'Faceoff Won', 'faceoff-lost': 'Faceoff Lost',
-        'ground-ball': 'Ground Ball', 'shot': 'Shot', 'goal': 'Goal',
-        'assist': 'Assist', 'turnover': 'Turnover',
-        'caused-turnover': 'Takeaway', 'save': 'Save', 'penalty': 'Penalty'
-    };
+    const statNames = getStatNames(getGameType(game));
 
     // Collect player events
     if (game.stats) {
@@ -2548,6 +2586,9 @@ function loadSeasonSummary() {
         return;
     }
 
+    // Determine predominant game type for labeling
+    const _seasonGt = games.filter(g => g.gameType === 'girls').length > games.length / 2 ? 'girls' : 'boys';
+
     // Sort games chronologically
     const sortedGames = [...games].sort((a, b) => new Date(a.completedAt || a.datetime) - new Date(b.completedAt || b.datetime));
 
@@ -2600,7 +2641,7 @@ function loadSeasonSummary() {
             <th style="${thStyle}">Score</th>
             <th style="${thStyle}">G</th><th style="${thStyle}">A</th><th style="${thStyle}">Pts</th>
             <th style="${thStyle}">Sh</th><th style="${thStyle}">Sh%</th>
-            <th style="${thStyle}">GB</th><th style="${thStyle}">FOW</th><th style="${thStyle}">FOL</th><th style="${thStyle}">FO%</th>
+            <th style="${thStyle}">GB</th><th style="${thStyle}">${getFaceoffAbbrev(_seasonGt, 'won')}</th><th style="${thStyle}">${getFaceoffAbbrev(_seasonGt, 'lost')}</th><th style="${thStyle}">${getFaceoffPctLabel(_seasonGt)}</th>
             <th style="${thStyle}">TO</th><th style="${thStyle}">TA</th><th style="${thStyle}">Sv</th><th style="${thStyle}">Pen</th>`;
     }
 
@@ -2796,7 +2837,7 @@ function loadSeasonSummary() {
         <th style="${stickyTh} background: var(--primary-color);">Player</th>
         <th style="${thStyle}">GP</th><th style="${thStyle}">G</th><th style="${thStyle}">A</th><th style="${thStyle}">Pts</th>
         <th style="${thStyle}">Sh</th><th style="${thStyle}">Sh%</th><th style="${thStyle}">GB</th>
-        <th style="${thStyle}">FOW</th><th style="${thStyle}">FOL</th><th style="${thStyle}">FO%</th>
+        <th style="${thStyle}">${getFaceoffAbbrev(_seasonGt, 'won')}</th><th style="${thStyle}">${getFaceoffAbbrev(_seasonGt, 'lost')}</th><th style="${thStyle}">${getFaceoffPctLabel(_seasonGt)}</th>
         <th style="${thStyle}">TO</th><th style="${thStyle}">TA</th><th style="${thStyle}">Sv</th><th style="${thStyle}">Pen</th><th style="${thStyle}">PIM</th>
     </tr></thead><tbody>`;
 
@@ -2845,7 +2886,7 @@ function loadSeasonSummary() {
         <th style="${stickyTh} background: var(--success-color);">Player</th>
         <th style="${thStyle}">GP</th><th style="${thStyle}">G/G</th><th style="${thStyle}">A/G</th><th style="${thStyle}">Pts/G</th>
         <th style="${thStyle}">Sh/G</th><th style="${thStyle}">Sh%</th><th style="${thStyle}">GB/G</th>
-        <th style="${thStyle}">FO%</th><th style="${thStyle}">Sv/G</th>
+        <th style="${thStyle}">${getFaceoffPctLabel(_seasonGt)}</th><th style="${thStyle}">Sv/G</th>
     </tr></thead><tbody>`;
 
     sortedPlayers.forEach((s, i) => {
@@ -2975,7 +3016,7 @@ function renderPlayerGameLog() {
         <th style="${stickyTh}">Game</th><th style="${thStyle}">Score</th>
         <th style="${thStyle}">G</th><th style="${thStyle}">A</th><th style="${thStyle}">Pts</th>
         <th style="${thStyle}">Sh</th><th style="${thStyle}">Sh%</th><th style="${thStyle}">GB</th>
-        <th style="${thStyle}">FOW</th><th style="${thStyle}">FOL</th><th style="${thStyle}">FO%</th>
+        <th style="${thStyle}">${getFaceoffAbbrev(_seasonGt, 'won')}</th><th style="${thStyle}">${getFaceoffAbbrev(_seasonGt, 'lost')}</th><th style="${thStyle}">${getFaceoffPctLabel(_seasonGt)}</th>
         <th style="${thStyle}">TO</th><th style="${thStyle}">TA</th><th style="${thStyle}">Sv</th><th style="${thStyle}">Pen</th>
     </tr></thead><tbody>`;
 
@@ -3086,7 +3127,10 @@ function exportCSV() {
     const sortedGames = [...games].sort((a, b) => new Date(a.completedAt || a.datetime) - new Date(b.completedAt || b.datetime));
 
     // Build CSV rows: one row per player per game + season totals row per player
-    const headers = ['Player', 'Number', 'Position', 'Game', 'Date', 'Result', 'Score', 'Goals', 'Assists', 'Points', 'Shots', 'Shot%', 'Ground Balls', 'Faceoff Wins', 'Faceoff Losses', 'FO%', 'Turnovers', 'Caused Turnovers', 'Saves', 'Penalties'];
+    const _csvGt = games.filter(g => g.gameType === 'girls').length > games.length / 2 ? 'girls' : 'boys';
+    const headers = ['Player', 'Number', 'Position', 'Game', 'Date', 'Result', 'Score', 'Goals', 'Assists', 'Points', 'Shots', 'Shot%', 'Ground Balls',
+        getFaceoffLabel(_csvGt, 'won').replace('Won','Wins'), getFaceoffLabel(_csvGt, 'lost').replace('Lost','Losses'), getFaceoffPctLabel(_csvGt),
+        'Turnovers', 'Caused Turnovers', 'Saves', 'Penalties'];
     const rows = [headers];
 
     roster.forEach(player => {
@@ -3503,13 +3547,38 @@ function initVoiceRecognition() {
         } else if (parsedList.length > 1) {
             // Multi-stat chain — execute silently, aggregate feedback
             const descriptions = [];
+            const chainResults = [];
             for (const parsed of parsedList) {
-                const desc = executeVoiceCommand(parsed, { silent: true });
-                if (desc) descriptions.push(desc);
+                const res = executeVoiceCommand(parsed, { silent: true });
+                if (res) {
+                    // res may be a string (clears, penalties) or structured object
+                    const desc = typeof res === 'string' ? res : res.description;
+                    descriptions.push(desc);
+                    if (typeof res === 'object') chainResults.push(res);
+                }
             }
             if (descriptions.length > 0) {
                 showVoiceFeedback('Recorded!', descriptions.join(', '));
-                setTimeout(hideVoiceFeedback, 2000);
+
+                // After chain, trigger shot chart for the last goal or shot
+                const lastGoal = [...chainResults].reverse().find(r => r.stat === 'goal');
+                const lastShot = [...chainResults].reverse().find(r => r.stat === 'shot');
+                const shotChartTarget = lastGoal || lastShot;
+
+                if (shotChartTarget) {
+                    setTimeout(() => {
+                        hideVoiceFeedback();
+                        if (shotChartTarget.stat === 'goal') {
+                            promptShotLocation(shotChartTarget.timestamp, () => {
+                                promptForAssist(shotChartTarget.playerId, shotChartTarget.timestamp);
+                            });
+                        } else {
+                            promptShotLocation(shotChartTarget.timestamp, () => {});
+                        }
+                    }, 800);
+                } else {
+                    setTimeout(hideVoiceFeedback, 2000);
+                }
             }
         } else {
             const heard = event.results[0][0].transcript;
@@ -3622,6 +3691,8 @@ const VOICE_ALIASES = {
     'won': 'win', 'want': 'win', 'when': 'win', 'juan': 'win',
     'loss': 'lost', 'laws': 'lost', 'los': 'lost',
     'phase': 'face', 'faith': 'face', 'bass': 'face',
+    // Draw helpers (girls lacrosse)
+    'draws': 'draw', 'drawed': 'draw', 'drone': 'draw',
     // Ground ball helpers
     'grown': 'ground', 'round': 'ground', 'crowned': 'ground',
     // Turnover / Takeaway
@@ -3638,6 +3709,8 @@ const STAT_TRIGGERS = [
     { phrases: ['opponent failed clear', 'opp failed clear'], stat: 'opp-failed-clear' },
     { phrases: ['opponent clear', 'opp clear'], stat: 'opp-clear' },
     { phrases: ['ground ball'], stat: 'ground-ball' },
+    { phrases: ['draw control win', 'draw win', 'draw won', 'draw control won'], stat: 'faceoff-won' },
+    { phrases: ['draw control lost', 'draw loss', 'draw lost', 'draw control loss'], stat: 'faceoff-lost' },
     { phrases: ['faceoff win', 'face off win', 'faceoff one', 'face off one'], stat: 'faceoff-won' },
     { phrases: ['faceoff lost', 'face off lost', 'faceoff loss', 'face off loss'], stat: 'faceoff-lost' },
     { phrases: ['takeaway', 'take away'], stat: 'caused-turnover' },
@@ -3697,8 +3770,8 @@ function parseVoiceCommand(rawText) {
 
     // 4a. Handle "one" specially — excluded from convertSpokenNumbers because
     //     speech API often transcribes "won" as "one" (e.g. "faceoff won" → "faceoff one").
-    //     Treat "one" as player #1 only when it's NOT the word right after "faceoff".
-    if (!playerNumber && /\bone\b/i.test(text) && !/face[\s-]?off\s+one\b/i.test(text)) {
+    //     Treat "one" as player #1 only when it's NOT the word right after "faceoff" or "draw".
+    if (!playerNumber && /\bone\b/i.test(text) && !/face[\s-]?off\s+one\b/i.test(text) && !/draw\s+one\b/i.test(text)) {
         playerNumber = '1';
     }
 
@@ -3917,7 +3990,8 @@ function executeVoiceCommand(parsed, { silent = false } = {}) {
                     setTimeout(hideVoiceFeedback, 1500);
                 }
             }
-            return result.description;
+            // Return structured info for chain handler
+            return { description: result.description, stat: parsed.stat, timestamp: result.timestamp, playerId: player.id };
         }
         return null;
     }
@@ -3938,12 +4012,7 @@ function recordVoicePlayerStat(playerId, statType) {
     const player = roster.find(p => p.id === playerId);
     if (!player) return null;
 
-    const statNames = {
-        'faceoff-won': 'Faceoff Won', 'faceoff-lost': 'Faceoff Lost',
-        'ground-ball': 'Ground Ball', 'shot': 'Shot', 'goal': 'Goal',
-        'assist': 'Assist', 'turnover': 'Turnover',
-        'caused-turnover': 'Takeaway', 'save': 'Save'
-    };
+    const statNames = getStatNames(getGameType(currentGame));
 
     const undoActions = [];
     const ts = recordStatTimestamp();
@@ -3991,12 +4060,7 @@ function recordVoiceOpponentStat(statType) {
     if (!currentGame) return null;
     resumeClockIfGoalPaused();
 
-    const statNames = {
-        'faceoff-won': 'Faceoff Won', 'faceoff-lost': 'Faceoff Lost',
-        'ground-ball': 'Ground Ball', 'shot': 'Shot', 'goal': 'Goal',
-        'assist': 'Assist', 'turnover': 'Turnover',
-        'caused-turnover': 'Takeaway', 'save': 'Save'
-    };
+    const statNames = getStatNames(getGameType(currentGame));
 
     const undoActions = [];
     const ts = recordStatTimestamp();
