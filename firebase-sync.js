@@ -126,7 +126,7 @@ var LaxSync = (function () {
                 var merged = localTeams.slice();
                 cloudTeams.forEach(function (ct) {
                     if (!localCodes[ct.code]) {
-                        merged.push({ code: ct.code, name: ct.name || ct.code });
+                        merged.push({ code: ct.code, name: ct.name || ct.code, gameType: ct.gameType || 'boys' });
                     }
                 });
 
@@ -179,6 +179,14 @@ var LaxSync = (function () {
         return getLocalArray(USER_TEAMS_KEY);
     }
 
+    function getActiveTeamGameType() {
+        var code = getActiveTeam();
+        if (!code) return 'boys';
+        var teams = getUserTeams();
+        var team = teams.find(function (t) { return t.code === code; });
+        return (team && team.gameType) || 'boys';
+    }
+
     function setUserTeams(teams) {
         localStorage.setItem(USER_TEAMS_KEY, JSON.stringify(teams));
     }
@@ -187,7 +195,7 @@ var LaxSync = (function () {
     function persistTeamsToFirestore() {
         if (!uid) return;
         var teams = getUserTeams().map(function (t) {
-            return { code: t.code, name: t.name, joinedAt: t.joinedAt || null };
+            return { code: t.code, name: t.name, gameType: t.gameType || 'boys', joinedAt: t.joinedAt || null };
         });
         var userRef = firebase.firestore().collection('users').doc(uid);
         userRef.set({
@@ -579,11 +587,46 @@ var LaxSync = (function () {
             return;
         }
 
-        // Prompt for a fresh team name — do NOT copy the current team's name
-        var teamName = prompt('Enter a name for your new team:');
-        if (!teamName || !teamName.trim()) return; // user cancelled
-        teamName = teamName.trim();
+        // Show create team dialog with name + game type
+        _showCreateTeamDialog(function (teamName, gameType) {
+            _doCreateTeam(teamName, gameType);
+        });
+    }
 
+    function _showCreateTeamDialog(onConfirm) {
+        var overlay = document.createElement('div');
+        overlay.className = 'overlay overlay--centered';
+        overlay.style.zIndex = '1100';
+        var content = document.createElement('div');
+        content.className = 'overlay-content overlay-content--narrow';
+        content.style.padding = '2rem';
+        content.innerHTML =
+            '<h3 style="margin-bottom: 1.5rem; text-align: center; color: #FFFFFF;">Create a Team</h3>' +
+            '<input type="text" id="create-team-name" placeholder="Team Name" class="input-field" style="margin-bottom: 1rem;">' +
+            '<h4 style="color: var(--text-primary); margin-bottom: 0.5rem;">Game Type</h4>' +
+            '<div class="radio-group" style="margin-bottom: 1.5rem;">' +
+                '<label><input type="radio" name="create-team-type" value="boys" checked> Boys Lacrosse</label>' +
+                '<label><input type="radio" name="create-team-type" value="girls"> Girls Lacrosse</label>' +
+            '</div>' +
+            '<button class="btn-primary" id="create-team-confirm" style="margin-bottom: 0.75rem;">Create Team</button>' +
+            '<button class="btn-secondary" id="create-team-cancel">Cancel</button>';
+        overlay.appendChild(content);
+        document.body.appendChild(overlay);
+
+        document.getElementById('create-team-cancel').onclick = function () { overlay.remove(); };
+        overlay.onclick = function (e) { if (e.target === overlay) overlay.remove(); };
+        document.getElementById('create-team-confirm').onclick = function () {
+            var name = document.getElementById('create-team-name').value.trim();
+            if (!name) { alert('Please enter a team name.'); return; }
+            var gameType = document.querySelector('input[name="create-team-type"]:checked').value;
+            overlay.remove();
+            onConfirm(name, gameType);
+        };
+        // Focus the name input
+        setTimeout(function () { document.getElementById('create-team-name').focus(); }, 100);
+    }
+
+    function _doCreateTeam(teamName, gameType) {
         monkeyPatchLocalStorage();
 
         var code = generateTeamCode();
@@ -606,12 +649,13 @@ var LaxSync = (function () {
             // Write team metadata document
             return db.collection('teams').doc(code).set({
                 teamName: teamName,
+                gameType: gameType || 'boys',
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 createdBy: uid
             }).then(function () {
                 // Add to local teams array
                 var teams = getUserTeams();
-                teams.push({ code: code, name: teamName, joinedAt: new Date().toISOString() });
+                teams.push({ code: code, name: teamName, gameType: gameType || 'boys', joinedAt: new Date().toISOString() });
                 setUserTeams(teams);
 
                 // Set as active team
@@ -661,6 +705,7 @@ var LaxSync = (function () {
                     type: 'team_created',
                     teamCode: code,
                     teamName: teamName,
+                    gameType: gameType || 'boys',
                     createdBy: user ? user.displayName || user.email || uid : uid,
                     createdByEmail: user ? user.email || '' : '',
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -715,8 +760,9 @@ var LaxSync = (function () {
                 return;
             }
 
-            // Add to local teams array
-            teams.push({ code: code, name: teamLabel, joinedAt: new Date().toISOString() });
+            // Add to local teams array (inherit gameType from team metadata)
+            var joinedGameType = teamData.gameType || 'boys';
+            teams.push({ code: code, name: teamLabel, gameType: joinedGameType, joinedAt: new Date().toISOString() });
             setUserTeams(teams);
 
             // Set as active team
@@ -1174,7 +1220,8 @@ var LaxSync = (function () {
             var isActive = team.code === activeCode;
             html += '<div class="team-list-item' + (isActive ? ' active' : '') + '" onclick="LaxSync.switchTeam(\'' + team.code + '\')">';
             html += '  <div class="team-list-item-info">';
-            html += '    <div class="team-list-item-name">' + escapeHtml(team.name) + '</div>';
+            var typeLabel = team.gameType === 'girls' ? 'Girls' : 'Boys';
+            html += '    <div class="team-list-item-name">' + escapeHtml(team.name) + ' <span style="font-size:0.75rem;color:var(--text-secondary);font-weight:400;">(' + typeLabel + ')</span></div>';
             html += '    <div class="team-list-item-code">' + team.code;
             html += '      <button class="team-copy-btn" style="margin-left:0.5rem;" onclick="event.stopPropagation(); LaxSync.copyTeamCode(\'' + team.code + '\')">Copy</button>';
             html += '    </div>';
@@ -1412,6 +1459,7 @@ var LaxSync = (function () {
         recoverAll: recoverAll,
         loadTeamUI: loadTeamUI,
         getActiveTeam: getActiveTeam,
+        getActiveTeamGameType: getActiveTeamGameType,
         getUserTeams: getUserTeams,
         updateActiveTeamDisplay: updateActiveTeamDisplay,
         setGameActive: setGameActive,

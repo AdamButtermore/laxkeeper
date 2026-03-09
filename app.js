@@ -196,9 +196,10 @@ function renderTeamSelector() {
     }
 
     select.style.display = '';
-    select.innerHTML = teams.map(t =>
-        `<option value="${t.code}"${t.code === activeCode ? ' selected' : ''}>${t.name}</option>`
-    ).join('');
+    select.innerHTML = teams.map(t => {
+        const typeTag = t.gameType === 'girls' ? ' (Girls)' : '';
+        return `<option value="${t.code}"${t.code === activeCode ? ' selected' : ''}>${t.name}${typeTag}</option>`;
+    }).join('');
 }
 
 function onTeamSelectorChange(code) {
@@ -323,6 +324,13 @@ function showScreen(screenId) {
                     schedBanner.style.display = 'none';
                 }
             }
+        }
+        // Pre-select game type from active team and apply defaults
+        const teamGameType = (typeof LaxSync !== 'undefined' && LaxSync.getActiveTeamGameType) ? LaxSync.getActiveTeamGameType() : 'boys';
+        const gameTypeRadio = document.querySelector(`input[name="game-type"][value="${teamGameType}"]`);
+        if (gameTypeRadio) {
+            gameTypeRadio.checked = true;
+            applyGameTypeDefaults();
         }
     }
     if (screenId === 'games-screen') loadGamesList();
