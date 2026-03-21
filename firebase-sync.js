@@ -1504,11 +1504,20 @@ var LaxSync = (function () {
     // Adds-only merge of two game arrays.
     // - Never deletes games from either side
     // - On ID conflict, resolveGameConflict picks the winner (completed beats scheduled)
-    // - localArray is passed as first arg to resolveGameConflict (tie-break favors local)
+    // - Games with a teamCode that doesn't match the active team are filtered out
     function mergeGames(localArray, cloudArray) {
         if (!localArray && !cloudArray) return null;
         if (!localArray || !Array.isArray(localArray)) return cloudArray || null;
         if (!cloudArray || !Array.isArray(cloudArray)) return localArray;
+
+        var activeCode = getActiveTeam();
+
+        // Filter: only include games that belong to this team (or have no teamCode — legacy)
+        function belongsToTeam(game) {
+            if (!game) return false;
+            if (!game.teamCode) return true; // legacy game without teamCode
+            return game.teamCode === activeCode;
+        }
 
         // Index cloud by ID
         var cloudById = {};
@@ -1522,6 +1531,7 @@ var LaxSync = (function () {
 
         localArray.forEach(function (localItem) {
             if (!localItem || !localItem.id) return;
+            if (!belongsToTeam(localItem)) return; // wrong team — skip
             var cloudItem = cloudById[localItem.id];
             var winner = cloudItem ? resolveGameConflict(localItem, cloudItem) : localItem;
             merged.push(winner);
@@ -1531,6 +1541,7 @@ var LaxSync = (function () {
         // Add cloud-only games (not in local — never delete)
         cloudArray.forEach(function (cloudItem) {
             if (cloudItem && cloudItem.id && !mergedById[cloudItem.id]) {
+                if (!belongsToTeam(cloudItem)) return; // wrong team — skip
                 merged.push(cloudItem);
             }
         });

@@ -545,9 +545,11 @@ function scheduleGame() {
     // Combine date and time into a datetime string
     const datetime = gameTime ? `${gameDate}T${gameTime}` : `${gameDate}T00:00`;
 
+    const teamCode = (typeof LaxSync !== 'undefined' && LaxSync.getActiveTeam) ? LaxSync.getActiveTeam() : '';
     const games = getGames();
     games.push({
-        id: Date.now().toString(),
+        id: (teamCode ? teamCode + '_' : '') + Date.now().toString(),
+        teamCode: teamCode,
         opponent,
         datetime,
         location,
