@@ -36,9 +36,8 @@ var LaxSync = (function () {
     // Track whether we've completed initial hydration (prevents queue flush before merge)
     var hydrationComplete = false;
 
-    // Game-in-progress guard: defer incoming snapshots to avoid overwriting active game
+    // Game-in-progress guard: all incoming snapshots are dropped while active
     var gameInProgress = false;
-    var deferredGamesSnapshot = null;
 
     // ---- Init ----
     function init(passedUser) {
@@ -215,23 +214,84 @@ var LaxSync = (function () {
             return;
         }
 
-        // Detach old listeners
-        detachListeners();
+        // Block switching while a game is in progress
+        if (gameInProgress || localStorage.getItem('laxkeeper_current_game')) {
+            alert('You have a game in progress. Please end or cancel the game before switching teams.');
+            return;
+        }
 
-        // Set new active team
-        localStorage.setItem(ACTIVE_TEAM_KEY, code);
+        // Flush pending writes to the CURRENT team before switching
+        var flushPromise;
+        if (userDocRef && pendingWrites.length > 0) {
+            console.log('[LaxSync] Flushing', pendingWrites.length, 'pending write(s) to current team before switch');
+            flushPromise = flushPendingWritesAsync();
+        } else if (userDocRef) {
+            // Even without pending writes, push current local state to ensure nothing is lost
+            flushPromise = buildDataBatch().commit().then(function () {
+                console.log('[LaxSync] Saved current team data before switch');
+            }).catch(function (err) {
+                console.warn('[LaxSync] Pre-switch save failed (will proceed):', err.message);
+            });
+        } else {
+            flushPromise = Promise.resolve();
+        }
 
-        // Point at new Firestore path
-        userDocRef = firebase.firestore().collection('teams').doc(code).collection('data');
+        flushPromise.then(function () {
+            // Clear pending writes — they belonged to the old team
+            pendingWrites = [];
 
-        // When switching teams, cloud replaces local (different team's data)
-        hydrateFromFirestore(true).then(function () {
-            setupRealtimeListeners();
-            loadTeamUI();
-            updateActiveTeamDisplay();
-            refreshUI();
-            persistTeamsToFirestore();
-            console.log('[LaxSync] Switched to team:', code);
+            // Detach old listeners
+            detachListeners();
+
+            // Set new active team
+            localStorage.setItem(ACTIVE_TEAM_KEY, code);
+
+            // Point at new Firestore path
+            userDocRef = firebase.firestore().collection('teams').doc(code).collection('data');
+
+            // When switching teams, cloud replaces local (different team's data)
+            hydrateFromFirestore(true).then(function () {
+                setupRealtimeListeners();
+                loadTeamUI();
+                updateActiveTeamDisplay();
+                refreshUI();
+                persistTeamsToFirestore();
+                console.log('[LaxSync] Switched to team:', code);
+            });
+        });
+    }
+
+    // Flush pending writes and return a Promise that resolves when done
+    function flushPendingWritesAsync() {
+        if (!userDocRef || pendingWrites.length === 0) return Promise.resolve();
+
+        var writes = pendingWrites.slice();
+        pendingWrites = [];
+        var promises = [];
+
+        writes.forEach(function (w) {
+            var docName = KEY_MAP[w.key];
+            if (!docName) return;
+            var now = firebase.firestore.FieldValue.serverTimestamp();
+
+            if (w.key === 'laxkeeper_team_name') {
+                promises.push(
+                    userDocRef.doc(docName).set({ teamName: w.value, updatedAt: now }).catch(logError)
+                );
+            } else {
+                var parsed = safeJSONParse(w.value);
+                if (parsed !== null) {
+                    promises.push(
+                        userDocRef.doc(docName).set({ items: parsed, updatedAt: now }).catch(logError)
+                    );
+                }
+            }
+        });
+
+        return Promise.all(promises).then(function () {
+            console.log('[LaxSync] Flushed', writes.length, 'pending write(s)');
+        }).catch(function (err) {
+            console.warn('[LaxSync] Some pending writes failed during flush:', err.message);
         });
     }
 
@@ -257,15 +317,17 @@ var LaxSync = (function () {
                     var mergedGames, mergedRoster;
 
                     if (replaceMode) {
-                        // Team switch: cloud replaces local entirely
+                        // Team switch: roster replaces (team-specific), games use conflict resolution
                         mergedGames = cloudDocs.games ? cloudDocs.games.items : null;
                         mergedRoster = cloudDocs.roster ? cloudDocs.roster.items : null;
+                        // Note: local data was flushed to the previous team's Firestore before switch
                     } else {
-                        // Normal startup: merge by ID, keeping local-only items
-                        mergedGames = mergeArrayById(
-                            localStorage.getItem('laxkeeper_games'),
-                            cloudDocs.games ? cloudDocs.games.items : null
-                        );
+                        // Normal startup: merge with conflict resolution
+                        var localGamesJSON = localStorage.getItem('laxkeeper_games');
+                        var localGamesArr = localGamesJSON ? safeJSONParse(localGamesJSON) : null;
+                        var cloudGamesArr = cloudDocs.games ? cloudDocs.games.items : null;
+                        mergedGames = mergeGames(localGamesArr, cloudGamesArr);
+
                         mergedRoster = mergeArrayById(
                             localStorage.getItem('laxkeeper_roster'),
                             cloudDocs.roster ? cloudDocs.roster.items : null
@@ -460,17 +522,16 @@ var LaxSync = (function () {
         } else {
             var parsed = safeJSONParse(value);
             if (parsed !== null) {
-                // Use transaction to merge by ID instead of last-write-wins
+                // Adds-only merge with conflict resolution (completed beats scheduled)
                 var docRef = userDocRef.doc(docName);
                 firebase.firestore().runTransaction(function (transaction) {
                     return transaction.get(docRef).then(function (doc) {
-                        var cloudArray = (doc.exists && doc.data() && doc.data().items) ? doc.data().items : null;
-                        var merged = mergeArraysByIdDirect(parsed, cloudArray);
+                        var cloudArray = (doc.exists && doc.data() && doc.data().items) ? doc.data().items : [];
+                        var merged = mergeGames(parsed, cloudArray);
                         transaction.set(docRef, { items: merged || parsed, updatedAt: now });
                     });
                 }).catch(function (err) {
                     console.warn('[LaxSync] Transaction failed for ' + docName + ', queuing for retry:', err.message);
-                    // Queue for retry instead of bare set (preserves merge semantics when back online)
                     queuePendingWrite(key, value);
                 });
             }
@@ -499,6 +560,10 @@ var LaxSync = (function () {
     function setupRealtimeListeners() {
         listenDoc('roster', function (data) {
             if (data && data.items) {
+                if (gameInProgress) {
+                    console.log('[LaxSync] Dropped roster snapshot (game in progress)');
+                    return;
+                }
                 writeLocalSuppressed('laxkeeper_roster', JSON.stringify(data.items));
                 refreshUI();
             }
@@ -507,18 +572,24 @@ var LaxSync = (function () {
         listenDoc('games', function (data) {
             if (data && data.items) {
                 if (gameInProgress) {
-                    // Stash snapshot — will be merged when game ends
-                    deferredGamesSnapshot = data.items;
-                    console.log('[LaxSync] Deferred games snapshot (game in progress)');
+                    console.log('[LaxSync] Dropped games snapshot (game in progress)');
                     return;
                 }
-                writeLocalSuppressed('laxkeeper_games', JSON.stringify(data.items));
+                // Merge incoming cloud games with local — local wins on conflict
+                // to protect recently-saved games that may not have synced yet
+                var localGames = safeJSONParse(localStorage.getItem('laxkeeper_games'));
+                var merged = mergeGames(localGames, data.items);
+                writeLocalSuppressed('laxkeeper_games', JSON.stringify(merged || data.items));
                 refreshUI();
             }
         });
 
         listenDoc('settings', function (data) {
             if (data && data.teamName !== undefined) {
+                if (gameInProgress) {
+                    console.log('[LaxSync] Dropped settings snapshot (game in progress)');
+                    return;
+                }
                 writeLocalSuppressed('laxkeeper_team_name', data.teamName);
                 refreshUI();
             }
@@ -587,6 +658,12 @@ var LaxSync = (function () {
             return;
         }
 
+        // Block creating a new team while a game is in progress
+        if (gameInProgress || localStorage.getItem('laxkeeper_current_game')) {
+            alert('You have a game in progress. Please end or cancel the game before creating a new team.');
+            return;
+        }
+
         // Show create team dialog with name + game type
         _showCreateTeamDialog(function (teamName, gameType) {
             _doCreateTeam(teamName, gameType);
@@ -646,12 +723,21 @@ var LaxSync = (function () {
                 return;
             }
 
+            // Save current team's data to Firestore before creating the new team
+            var saveCurrentPromise = userDocRef
+                ? buildDataBatch().commit().catch(function (err) {
+                    console.warn('[LaxSync] Pre-create save failed:', err.message);
+                })
+                : Promise.resolve();
+
             // Write team metadata document
-            return db.collection('teams').doc(code).set({
-                teamName: teamName,
-                gameType: gameType || 'boys',
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                createdBy: uid
+            return saveCurrentPromise.then(function () {
+                return db.collection('teams').doc(code).set({
+                    teamName: teamName,
+                    gameType: gameType || 'boys',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    createdBy: uid
+                });
             }).then(function () {
                 // Add to local teams array
                 var teams = getUserTeams();
@@ -663,8 +749,7 @@ var LaxSync = (function () {
 
                 // Drain pending writes and deferred snapshots from old team
                 pendingWrites = [];
-                deferredGamesSnapshot = null;
-
+    
                 // Prevent stale hydration state from flushing old data to new team
                 hydrationComplete = false;
 
@@ -729,6 +814,12 @@ var LaxSync = (function () {
             return;
         }
 
+        // Block joining while a game is in progress
+        if (gameInProgress || localStorage.getItem('laxkeeper_current_game')) {
+            alert('You have a game in progress. Please end or cancel the game before joining a team.');
+            return;
+        }
+
         var input = document.getElementById('join-team-code');
         var code = (input ? input.value : '').toUpperCase().trim();
 
@@ -760,28 +851,40 @@ var LaxSync = (function () {
                 return;
             }
 
-            // Add to local teams array (inherit gameType from team metadata)
-            var joinedGameType = teamData.gameType || 'boys';
-            teams.push({ code: code, name: teamLabel, gameType: joinedGameType, joinedAt: new Date().toISOString() });
-            setUserTeams(teams);
+            // Save current team data before switching
+            var savePromise = userDocRef
+                ? buildDataBatch().commit().catch(function (err) {
+                    console.warn('[LaxSync] Pre-join save failed:', err.message);
+                })
+                : Promise.resolve();
 
-            // Set as active team
-            localStorage.setItem(ACTIVE_TEAM_KEY, code);
+            savePromise.then(function () {
+                // Clear pending writes from old team
+                pendingWrites = [];
+    
+                // Add to local teams array (inherit gameType from team metadata)
+                var joinedGameType = teamData.gameType || 'boys';
+                teams.push({ code: code, name: teamLabel, gameType: joinedGameType, joinedAt: new Date().toISOString() });
+                setUserTeams(teams);
 
-            // Switch sync target to team path
-            switchToTeamPath(code);
+                // Set as active team
+                localStorage.setItem(ACTIVE_TEAM_KEY, code);
 
-            // Pull team data down to local (team data wins — replace mode)
-            hydrateFromFirestore(true).then(function () {
-                setupRealtimeListeners();
+                // Switch sync target to team path
+                switchToTeamPath(code);
 
-                // Persist teams to user doc
-                persistTeamsToFirestore();
+                // Pull team data down to local (team data wins — replace mode)
+                hydrateFromFirestore(true).then(function () {
+                    setupRealtimeListeners();
 
-                loadTeamUI();
-                updateActiveTeamDisplay();
-                if (input) input.value = '';
-                console.log('[LaxSync] Joined team:', code);
+                    // Persist teams to user doc
+                    persistTeamsToFirestore();
+
+                    loadTeamUI();
+                    updateActiveTeamDisplay();
+                    if (input) input.value = '';
+                    console.log('[LaxSync] Joined team:', code);
+                });
             });
         }).catch(function (err) {
             console.error('[LaxSync] Join team failed:', err);
@@ -793,6 +896,12 @@ var LaxSync = (function () {
         if (!code) code = getActiveTeam();
         if (!code) return;
 
+        // Block leaving while a game is in progress
+        if (getActiveTeam() === code && (gameInProgress || localStorage.getItem('laxkeeper_current_game'))) {
+            alert('You have a game in progress. Please end or cancel the game before leaving the team.');
+            return;
+        }
+
         var teams = getUserTeams();
         var team = teams.find(function (t) { return t.code === code; });
         var teamLabel = team ? team.name : code;
@@ -801,45 +910,57 @@ var LaxSync = (function () {
             return;
         }
 
-        // Remove from teams array
-        teams = teams.filter(function (t) { return t.code !== code; });
-        setUserTeams(teams);
+        // Flush pending writes to the current team before leaving
+        var flushPromise = (getActiveTeam() === code && userDocRef)
+            ? buildDataBatch().commit().catch(function (err) {
+                console.warn('[LaxSync] Pre-leave save failed:', err.message);
+            })
+            : Promise.resolve();
 
-        // If we left the active team, switch to another or clear
-        if (getActiveTeam() === code) {
-            detachListeners();
-            userDocRef = null;
+        flushPromise.then(function () {
+            // Clear pending writes — they belonged to the team we're leaving
+            pendingWrites = [];
 
-            if (teams.length > 0) {
-                // Switch to the first remaining team — clear local data first
-                // to prevent old team's data from contaminating the new team
-                suppressSync = true;
-                try {
-                    localStorage.removeItem('laxkeeper_roster');
-                    localStorage.removeItem('laxkeeper_games');
-                    localStorage.removeItem('laxkeeper_current_game');
-                } finally {
-                    suppressSync = false;
+            // Remove from teams array
+            teams = teams.filter(function (t) { return t.code !== code; });
+            setUserTeams(teams);
+
+            // If we left the active team, switch to another or clear
+            if (getActiveTeam() === code) {
+                detachListeners();
+                userDocRef = null;
+
+                if (teams.length > 0) {
+                    // Switch to the first remaining team — clear local data first
+                    // to prevent old team's data from contaminating the new team
+                    suppressSync = true;
+                    try {
+                        localStorage.removeItem('laxkeeper_roster');
+                        localStorage.removeItem('laxkeeper_games');
+                        localStorage.removeItem('laxkeeper_current_game');
+                    } finally {
+                        suppressSync = false;
+                    }
+                    localStorage.setItem(ACTIVE_TEAM_KEY, teams[0].code);
+                    userDocRef = firebase.firestore().collection('teams').doc(teams[0].code).collection('data');
+                    hydrateFromFirestore().then(function () {
+                        setupRealtimeListeners();
+                        loadTeamUI();
+                        updateActiveTeamDisplay();
+                        refreshUI();
+                        persistTeamsToFirestore();
+                    });
+                    return;
+                } else {
+                    localStorage.removeItem(ACTIVE_TEAM_KEY);
                 }
-                localStorage.setItem(ACTIVE_TEAM_KEY, teams[0].code);
-                userDocRef = firebase.firestore().collection('teams').doc(teams[0].code).collection('data');
-                hydrateFromFirestore().then(function () {
-                    setupRealtimeListeners();
-                    loadTeamUI();
-                    updateActiveTeamDisplay();
-                    refreshUI();
-                    persistTeamsToFirestore();
-                });
-                return;
-            } else {
-                localStorage.removeItem(ACTIVE_TEAM_KEY);
             }
-        }
 
-        persistTeamsToFirestore();
-        loadTeamUI();
-        updateActiveTeamDisplay();
-        console.log('[LaxSync] Left team:', code);
+            persistTeamsToFirestore();
+            loadTeamUI();
+            updateActiveTeamDisplay();
+            console.log('[LaxSync] Left team:', code);
+        });
     }
 
     function forcePush() {
@@ -1315,51 +1436,102 @@ var LaxSync = (function () {
     // ---- Game-in-progress guard ----
     function setGameActive() {
         gameInProgress = true;
-        deferredGamesSnapshot = null;
-        console.log('[LaxSync] Game marked active — deferring incoming snapshots');
+        console.log('[LaxSync] Game checked out — all incoming snapshots dropped until end game');
     }
 
     function setGameInactive() {
         gameInProgress = false;
-        console.log('[LaxSync] Game marked inactive');
+        console.log('[LaxSync] Game ended — merging back to Firestore (adds only)');
 
-        if (deferredGamesSnapshot) {
-            // Merge the deferred cloud snapshot with current local games (which include the just-completed game)
-            var localGames = safeJSONParse(localStorage.getItem('laxkeeper_games'));
-            var merged = mergeArraysByIdDirect(localGames, deferredGamesSnapshot);
-            if (merged) {
-                writeLocalSuppressed('laxkeeper_games', JSON.stringify(merged));
-                // Push merged result back to cloud
-                if (userDocRef) {
-                    var now = firebase.firestore.FieldValue.serverTimestamp();
-                    userDocRef.doc('games').set({ items: merged, updatedAt: now }).catch(logError);
-                }
-            }
-            deferredGamesSnapshot = null;
+        if (!userDocRef) return;
+
+        // Read current local games (includes the just-completed game)
+        var localGames = safeJSONParse(localStorage.getItem('laxkeeper_games')) || [];
+
+        // Merge into Firestore: add/update local games, never delete cloud games
+        var gamesRef = userDocRef.doc('games');
+        var now = firebase.firestore.FieldValue.serverTimestamp();
+
+        firebase.firestore().runTransaction(function (transaction) {
+            return transaction.get(gamesRef).then(function (doc) {
+                var cloudGames = (doc.exists && doc.data() && doc.data().items) ? doc.data().items : [];
+                var merged = mergeGames(localGames, cloudGames);
+                transaction.set(gamesRef, { items: merged || localGames, updatedAt: now });
+                return merged || localGames;
+            });
+        }).then(function (merged) {
+            // Update local with the merged result (adds cloud-only games locally)
+            writeLocalSuppressed('laxkeeper_games', JSON.stringify(merged));
             refreshUI();
-        }
+            console.log('[LaxSync] Post-game merge complete:', merged.length, 'games');
+        }).catch(function (err) {
+            console.error('[LaxSync] Post-game merge failed, queuing:', err.message);
+            queuePendingWrite('laxkeeper_games', localStorage.getItem('laxkeeper_games'));
+        });
     }
 
-    // Direct array merge (no JSON string parsing needed) — used by setGameInactive and Phase 2 transactions
-    function mergeArraysByIdDirect(localArray, cloudArray) {
+    // ---- Conflict Resolution ----
+    // Rule: completed ALWAYS wins. A completed game has stats and must never
+    // be overwritten by a scheduled/in_progress version without user consent.
+    function resolveGameConflict(a, b) {
+        if (!a) return b;
+        if (!b) return a;
+
+        var aCompleted = a.status === 'completed';
+        var bCompleted = b.status === 'completed';
+
+        // Completed always wins over non-completed
+        if (aCompleted && !bCompleted) return a;
+        if (bCompleted && !aCompleted) return b;
+
+        // Both completed — keep the one with more recent completedAt
+        if (aCompleted && bCompleted) {
+            if (a.completedAt && b.completedAt) {
+                return new Date(a.completedAt) >= new Date(b.completedAt) ? a : b;
+            }
+            return a.completedAt ? a : b;
+        }
+
+        // Neither completed — prefer the one with more data (e.g. in_progress over scheduled)
+        var STATUS_RANK = { 'in_progress': 1, 'scheduled': 0 };
+        var rankA = STATUS_RANK[a.status] || 0;
+        var rankB = STATUS_RANK[b.status] || 0;
+        if (rankA !== rankB) return rankA > rankB ? a : b;
+
+        return a;
+    }
+
+    // Adds-only merge of two game arrays.
+    // - Never deletes games from either side
+    // - On ID conflict, resolveGameConflict picks the winner (completed beats scheduled)
+    // - localArray is passed as first arg to resolveGameConflict (tie-break favors local)
+    function mergeGames(localArray, cloudArray) {
         if (!localArray && !cloudArray) return null;
         if (!localArray || !Array.isArray(localArray)) return cloudArray || null;
         if (!cloudArray || !Array.isArray(cloudArray)) return localArray;
 
+        // Index cloud by ID
         var cloudById = {};
         cloudArray.forEach(function (item) {
             if (item && item.id) cloudById[item.id] = item;
         });
 
-        var merged = cloudArray.slice();
-        var mergedIds = {};
-        merged.forEach(function (item) {
-            if (item && item.id) mergedIds[item.id] = true;
+        // Start with resolved versions of all games that exist in local
+        var mergedById = {};
+        var merged = [];
+
+        localArray.forEach(function (localItem) {
+            if (!localItem || !localItem.id) return;
+            var cloudItem = cloudById[localItem.id];
+            var winner = cloudItem ? resolveGameConflict(localItem, cloudItem) : localItem;
+            merged.push(winner);
+            mergedById[localItem.id] = true;
         });
 
-        localArray.forEach(function (item) {
-            if (item && item.id && !mergedIds[item.id]) {
-                merged.push(item);
+        // Add cloud-only games (not in local — never delete)
+        cloudArray.forEach(function (cloudItem) {
+            if (cloudItem && cloudItem.id && !mergedById[cloudItem.id]) {
+                merged.push(cloudItem);
             }
         });
 
@@ -1441,6 +1613,26 @@ var LaxSync = (function () {
         });
     }
 
+    // ---- Explicit game deletion (user-initiated, bypasses adds-only merge) ----
+    function deleteGameFromCloud(gameId) {
+        if (!userDocRef) return;
+
+        var gamesRef = userDocRef.doc('games');
+        var now = firebase.firestore.FieldValue.serverTimestamp();
+
+        firebase.firestore().runTransaction(function (transaction) {
+            return transaction.get(gamesRef).then(function (doc) {
+                var cloudGames = (doc.exists && doc.data() && doc.data().items) ? doc.data().items : [];
+                var filtered = cloudGames.filter(function (g) { return !g || g.id !== gameId; });
+                transaction.set(gamesRef, { items: filtered, updatedAt: now });
+            });
+        }).then(function () {
+            console.log('[LaxSync] Deleted game from cloud:', gameId);
+        }).catch(function (err) {
+            console.error('[LaxSync] Failed to delete game from cloud:', err);
+        });
+    }
+
     // ---- Auto-init on DOMContentLoaded ----
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () {
@@ -1472,6 +1664,7 @@ var LaxSync = (function () {
         getUserTeams: getUserTeams,
         updateActiveTeamDisplay: updateActiveTeamDisplay,
         setGameActive: setGameActive,
-        setGameInactive: setGameInactive
+        setGameInactive: setGameInactive,
+        deleteGameFromCloud: deleteGameFromCloud
     };
 })();

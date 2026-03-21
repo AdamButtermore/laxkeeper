@@ -1980,6 +1980,10 @@ function deleteGame(gameId) {
 
     const updated = games.filter(g => g.id !== gameId);
     saveGames(updated);
+    // Explicitly delete from cloud (bypasses adds-only merge)
+    if (typeof LaxSync !== 'undefined' && LaxSync.deleteGameFromCloud) {
+        LaxSync.deleteGameFromCloud(gameId);
+    }
     loadGameHistory();
 }
 
