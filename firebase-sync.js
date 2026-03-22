@@ -1359,7 +1359,11 @@ var LaxSync = (function () {
             if (isActive) {
                 html += '  <span class="team-list-item-active-label">Active</span>';
             }
-            html += '  <div class="team-leave-section" onclick="event.stopPropagation();">';
+            html += '  <div class="team-actions-section" onclick="event.stopPropagation();">';
+            html += '    <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">';
+            html += '      <input type="text" id="ical-url-' + team.code + '" placeholder="iCal URL" class="input-field" style="flex:1;font-size:0.8rem;margin:0;padding:0.4rem 0.6rem;" value="' + escapeAttr(team.icalUrl || '') + '">';
+            html += '      <button class="btn-secondary" style="padding:0.4rem 0.8rem;font-size:0.8rem;white-space:nowrap;" onclick="LaxSync.importIcal(\'' + team.code + '\')">Sync Schedule</button>';
+            html += '    </div>';
             html += '    <button class="team-leave-btn" onclick="LaxSync.leaveTeam(\'' + team.code + '\')">Leave Team</button>';
             html += '  </div>';
             html += '</div>';
@@ -1644,6 +1648,209 @@ var LaxSync = (function () {
         });
     }
 
+    // ---- iCal Schedule Import ----
+    function importIcal(teamCode) {
+        // Read URL from the input field
+        var input = document.getElementById('ical-url-' + teamCode);
+        var url = input ? input.value.trim() : '';
+        if (!url) {
+            alert('Please enter an iCal URL.');
+            return;
+        }
+
+        // Normalize webcal:// to https://
+        url = url.replace(/^webcal:\/\//i, 'https://');
+
+        // Save the URL to the team's config
+        var teams = getUserTeams();
+        teams.forEach(function (t) {
+            if (t.code === teamCode) t.icalUrl = url;
+        });
+        setUserTeams(teams);
+        persistTeamsToFirestore();
+
+        // Fetch the iCal feed
+        fetch(url).then(function (res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.text();
+        }).then(function (icalText) {
+            var events = parseIcal(icalText);
+            if (events.length === 0) {
+                alert('No games found in the iCal feed.');
+                return;
+            }
+
+            // Get existing games for this team
+            var existingGames = getLocalArray('laxkeeper_games');
+
+            // Determine team's game type
+            var team = teams.find(function (t) { return t.code === teamCode; });
+            var gameType = (team && team.gameType) || 'boys';
+
+            // Match existing games by opponent + date to avoid duplicates
+            var existingKeys = {};
+            existingGames.forEach(function (g) {
+                if (g && g.opponent && g.datetime) {
+                    var key = normalizeMatchKey(g.opponent, g.datetime);
+                    existingKeys[key] = g;
+                }
+            });
+
+            var added = 0;
+            var skipped = 0;
+            var canceled = 0;
+
+            events.forEach(function (ev) {
+                if (ev.canceled) {
+                    canceled++;
+                    return;
+                }
+
+                var key = normalizeMatchKey(ev.opponent, ev.datetime);
+                var existing = existingKeys[key];
+
+                if (existing) {
+                    // Game exists — update location if missing, but never overwrite completed
+                    if (existing.status !== 'completed' && ev.location && !existing.location) {
+                        existing.location = ev.location;
+                    }
+                    skipped++;
+                    return;
+                }
+
+                // New game — add it
+                var gameId = teamCode + '_' + Date.now().toString() + '_' + added;
+                existingGames.push({
+                    id: gameId,
+                    teamCode: teamCode,
+                    opponent: ev.opponent,
+                    datetime: ev.datetime,
+                    location: ev.location || '',
+                    gameType: gameType,
+                    format: gameType === 'girls' ? 'halves' : 'quarters',
+                    clockType: 'stop',
+                    periodDuration: gameType === 'girls' ? 25 : 12,
+                    status: 'scheduled',
+                    createdAt: new Date().toISOString(),
+                    icalUid: ev.uid
+                });
+                added++;
+            });
+
+            // Save
+            localStorage.setItem('laxkeeper_games', JSON.stringify(existingGames));
+            if (typeof refreshUI === 'function') refreshUI();
+
+            var msg = 'iCal sync complete!\n\n';
+            msg += added + ' game(s) added\n';
+            msg += skipped + ' already existed (skipped)\n';
+            if (canceled > 0) msg += canceled + ' canceled (skipped)';
+            alert(msg);
+
+            console.log('[LaxSync] iCal import: added=' + added + ' skipped=' + skipped + ' canceled=' + canceled);
+        }).catch(function (err) {
+            console.error('[LaxSync] iCal fetch failed:', err);
+            alert('Failed to fetch iCal feed: ' + err.message + '\n\nMake sure the URL is correct and accessible.');
+        });
+    }
+
+    // Parse iCal text into an array of game events
+    function parseIcal(text) {
+        var events = [];
+        var blocks = text.split('BEGIN:VEVENT');
+
+        for (var i = 1; i < blocks.length; i++) {
+            var block = blocks[i].split('END:VEVENT')[0];
+
+            var uid = extractIcalField(block, 'UID');
+            var summary = extractIcalField(block, 'SUMMARY');
+            var dtstart = extractIcalField(block, 'DTSTART');
+            var location = extractIcalField(block, 'LOCATION');
+            var status = extractIcalField(block, 'STATUS');
+
+            if (!summary || !dtstart) continue;
+
+            var canceled = (status && status.toUpperCase() === 'CANCELLED') ||
+                           summary.toLowerCase().indexOf('(canceled)') !== -1;
+
+            // Parse opponent from summary
+            // Formats: "Team A vs Team B", "Team A at Team B"
+            var opponent = parseOpponent(summary);
+
+            // Parse datetime from iCal format (YYYYMMDDTHHMMSSZ)
+            var datetime = parseIcalDate(dtstart);
+
+            events.push({
+                uid: uid,
+                opponent: opponent,
+                datetime: datetime,
+                location: location || '',
+                canceled: canceled
+            });
+        }
+
+        return events;
+    }
+
+    function extractIcalField(block, field) {
+        // Handle both "FIELD:" and "FIELD;...:" formats
+        var regex = new RegExp('(?:^|\\n)' + field + '[;:]([^\\r\\n]*(?:\\r?\\n[ \\t][^\\r\\n]*)*)', 'i');
+        var match = block.match(regex);
+        if (!match) return '';
+        // Unfold continuation lines and unescape
+        return match[1]
+            .replace(/\r?\n[ \t]/g, '')
+            .replace(/\\n/g, '\n')
+            .replace(/\\,/g, ',')
+            .replace(/\\\\/g, '\\')
+            .trim();
+    }
+
+    function parseOpponent(summary) {
+        // Try "vs" split first, then "at"
+        var parts = summary.split(/\s+vs\s+/i);
+        if (parts.length < 2) parts = summary.split(/\s+at\s+/i);
+        if (parts.length < 2) return summary; // fallback: use full summary
+
+        // Take the opponent (second part), strip common league prefixes
+        var opponent = parts[1].trim();
+        // Strip prefixes like "GELL-88 ", "GELL-78 ", league codes
+        opponent = opponent.replace(/^[A-Z]+-\d+\s+/i, '');
+        return opponent;
+    }
+
+    function parseIcalDate(dtstring) {
+        // Format: 20260307T170000Z or 20260307T170000
+        var match = dtstring.match(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/);
+        if (!match) return '';
+
+        var year = match[1], month = match[2], day = match[3];
+        var hour = match[4], min = match[5];
+
+        if (dtstring.indexOf('Z') !== -1) {
+            // UTC — convert to local time
+            var d = new Date(Date.UTC(
+                parseInt(year), parseInt(month) - 1, parseInt(day),
+                parseInt(hour), parseInt(min), 0
+            ));
+            var lYear = d.getFullYear();
+            var lMonth = String(d.getMonth() + 1).padStart(2, '0');
+            var lDay = String(d.getDate()).padStart(2, '0');
+            var lHour = String(d.getHours()).padStart(2, '0');
+            var lMin = String(d.getMinutes()).padStart(2, '0');
+            return lYear + '-' + lMonth + '-' + lDay + 'T' + lHour + ':' + lMin;
+        }
+
+        return year + '-' + month + '-' + day + 'T' + hour + ':' + min;
+    }
+
+    // Normalize opponent name + date into a match key for dedup
+    function normalizeMatchKey(opponent, datetime) {
+        var name = (opponent || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        var date = (datetime || '').substring(0, 10); // just YYYY-MM-DD
+        return name + '|' + date;
+    }
+
     // ---- Auto-init on DOMContentLoaded ----
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () {
@@ -1676,6 +1883,7 @@ var LaxSync = (function () {
         updateActiveTeamDisplay: updateActiveTeamDisplay,
         setGameActive: setGameActive,
         setGameInactive: setGameInactive,
-        deleteGameFromCloud: deleteGameFromCloud
+        deleteGameFromCloud: deleteGameFromCloud,
+        importIcal: importIcal
     };
 })();
