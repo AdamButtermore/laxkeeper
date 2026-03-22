@@ -1360,9 +1360,9 @@ var LaxSync = (function () {
                 html += '  <span class="team-list-item-active-label">Active</span>';
             }
             html += '  <div class="team-actions-section" onclick="event.stopPropagation();">';
-            html += '    <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">';
-            html += '      <input type="text" id="ical-url-' + team.code + '" placeholder="iCal URL" class="input-field" style="flex:1;font-size:0.8rem;margin:0;padding:0.4rem 0.6rem;" value="' + escapeAttr(team.icalUrl || '') + '">';
-            html += '      <button class="btn-secondary" style="padding:0.4rem 0.8rem;font-size:0.8rem;white-space:nowrap;" onclick="LaxSync.importIcal(\'' + team.code + '\')">Sync Schedule</button>';
+            html += '    <div style="margin-bottom:0.5rem;">';
+            html += '      <input type="url" id="ical-url-' + team.code + '" placeholder="Paste iCal / WebCal URL" class="input-field" style="width:100%;font-size:1rem;margin:0;padding:0.75rem;color:var(--text-primary);" value="' + escapeAttr(team.icalUrl || '') + '">';
+            html += '      <button class="btn-secondary" style="width:100%;margin-top:0.5rem;" onclick="LaxSync.importIcal(\'' + team.code + '\')">Sync Schedule</button>';
             html += '    </div>';
             html += '    <button class="team-leave-btn" onclick="LaxSync.leaveTeam(\'' + team.code + '\')">Leave Team</button>';
             html += '  </div>';
