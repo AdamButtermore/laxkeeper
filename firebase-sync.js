@@ -1729,9 +1729,9 @@ var LaxSync = (function () {
                     datetime: ev.datetime,
                     location: ev.location || '',
                     gameType: gameType,
-                    format: gameType === 'girls' ? 'halves' : 'quarters',
-                    clockType: 'stop',
-                    periodDuration: gameType === 'girls' ? 25 : 12,
+                    format: 'quarters',
+                    clockType: gameType === 'girls' ? 'running' : 'stop',
+                    periodDuration: 12,
                     status: 'scheduled',
                     createdAt: new Date().toISOString(),
                     icalUid: ev.uid
