@@ -608,6 +608,7 @@ function loadScheduledGames() {
 
 function loadGamesList() {
     const games = getGames().filter(g => g.status === 'scheduled');
+    games.sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
     const display = document.getElementById('games-list');
 
     if (games.length === 0) {

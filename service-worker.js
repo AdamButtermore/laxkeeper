@@ -1,7 +1,7 @@
 // Laxtracular Service Worker
 // Caches app shell for offline use and fast loading
 
-var CACHE_NAME = 'laxtracular-v23';
+var CACHE_NAME = 'laxtracular-v24';
 var URLS_TO_CACHE = [
     '/',
     '/index.html',
