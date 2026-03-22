@@ -1756,7 +1756,7 @@ var LaxSync = (function () {
         });
     }
 
-    // Parse iCal text into an array of game events
+    // Parse iCal text into an array of game events (skips practices, meetings, etc.)
     function parseIcal(text) {
         var events = [];
         var blocks = text.split('BEGIN:VEVENT');
@@ -1769,14 +1769,18 @@ var LaxSync = (function () {
             var dtstart = extractIcalField(block, 'DTSTART');
             var location = extractIcalField(block, 'LOCATION');
             var status = extractIcalField(block, 'STATUS');
+            var description = extractIcalField(block, 'DESCRIPTION');
 
             if (!summary || !dtstart) continue;
+
+            // Only import games — skip practices, meetings, social events, etc.
+            var isGame = description.indexOf('Event Type: Game') !== -1;
+            if (!isGame) continue;
 
             var canceled = (status && status.toUpperCase() === 'CANCELLED') ||
                            summary.toLowerCase().indexOf('(canceled)') !== -1;
 
             // Parse opponent from summary
-            // Formats: "Team A vs Team B", "Team A at Team B"
             var opponent = parseOpponent(summary);
 
             // Parse datetime from iCal format (YYYYMMDDTHHMMSSZ)
@@ -1809,16 +1813,33 @@ var LaxSync = (function () {
     }
 
     function parseOpponent(summary) {
-        // Try "vs" split first, then "at"
-        var parts = summary.split(/\s+vs\s+/i);
-        if (parts.length < 2) parts = summary.split(/\s+at\s+/i);
-        if (parts.length < 2) return summary; // fallback: use full summary
+        // Handle formats:
+        //   "GELL-88 Mount Si White vs GELL-88 North Seattle Black"  (boys league)
+        //   "GELL-88 Mount Si White at GELL-88 Tahoma Gold"          (boys league)
+        //   "at mercer island 12u white"                               (girls - starts with at/vs)
+        //   "vs TBD"                                                   (girls - TBD opponent)
+        //   "Girls U12 Spring at Issaquah"                             (girls - team name prefix)
+
+        var s = summary.trim();
+
+        // If summary starts with "at " or "vs ", opponent is the rest
+        if (/^at\s+/i.test(s)) return capitalizeWords(s.replace(/^at\s+/i, ''));
+        if (/^vs\s+/i.test(s)) return capitalizeWords(s.replace(/^vs\s+/i, ''));
+
+        // Split on " vs " or " at "
+        var parts = s.split(/\s+vs\s+/i);
+        if (parts.length < 2) parts = s.split(/\s+at\s+/i);
+        if (parts.length < 2) return s; // fallback: use full summary
 
         // Take the opponent (second part), strip common league prefixes
         var opponent = parts[1].trim();
-        // Strip prefixes like "GELL-88 ", "GELL-78 ", league codes
+        // Strip prefixes like "GELL-88 ", "GELL-78 "
         opponent = opponent.replace(/^[A-Z]+-\d+\s+/i, '');
-        return opponent;
+        return capitalizeWords(opponent);
+    }
+
+    function capitalizeWords(str) {
+        return str.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
     }
 
     function parseIcalDate(dtstring) {
