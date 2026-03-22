@@ -1264,12 +1264,22 @@ function endGame() {
     saveGames(games);
     logEvent('end_game', { home_score: currentGame.homeScore, away_score: currentGame.awayScore });
 
+    // Save game ID before clearing
+    const completedGameId = currentGame.id;
+
     // Clear current game
     localStorage.removeItem(STORAGE_KEYS.CURRENT_GAME);
     currentGame = null;
     if (typeof LaxSync !== 'undefined' && LaxSync.setGameInactive) LaxSync.setGameInactive();
 
-    alert('Game saved!');
+    // Offer to share summary
+    if (typeof LaxSync !== 'undefined' && LaxSync.shareSummary) {
+        if (confirm('Game saved! Share the game summary?')) {
+            LaxSync.shareSummary(completedGameId);
+        }
+    } else {
+        alert('Game saved!');
+    }
     showScreen('home-screen');
 }
 
@@ -1963,6 +1973,7 @@ function loadGameHistory() {
                 </p>
                 <button class="btn-secondary" onclick="viewGameStats('${game.id}')">View Stats</button>
                 <button class="btn-secondary" onclick="editGameStats('${game.id}')" style="margin-top: 0.5rem;">Edit Stats</button>
+                <button class="btn-primary" onclick="LaxSync.shareSummary('${game.id}')" style="margin-top: 0.5rem;">Share Summary</button>
                 <button class="btn-move-team" onclick="moveGameToTeam('${game.id}')">Move to Team...</button>
                 <button class="btn-danger" onclick="deleteGame('${game.id}')" style="margin-top: 0.5rem;">Delete Game</button>
             </div>
