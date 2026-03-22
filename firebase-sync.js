@@ -1669,8 +1669,10 @@ var LaxSync = (function () {
         setUserTeams(teams);
         persistTeamsToFirestore();
 
-        // Fetch the iCal feed
-        fetch(url).then(function (res) {
+        // Fetch via CORS proxy (Firebase Cloud Function)
+        var ICAL_PROXY = 'https://us-west1-lax-keeper.cloudfunctions.net/icalProxy';
+        var proxyUrl = ICAL_PROXY + '?url=' + encodeURIComponent(url);
+        fetch(proxyUrl).then(function (res) {
             if (!res.ok) throw new Error('HTTP ' + res.status);
             return res.text();
         }).then(function (icalText) {
