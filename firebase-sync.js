@@ -1364,11 +1364,6 @@ var LaxSync = (function () {
             html += '      <input type="url" id="ical-url-' + team.code + '" placeholder="Paste iCal / WebCal URL" class="input-field" style="width:100%;font-size:1rem;margin:0;padding:0.75rem;color:var(--text-primary);" value="' + escapeAttr(team.icalUrl || '') + '">';
             html += '      <button class="btn-secondary" style="width:100%;margin-top:0.5rem;" onclick="LaxSync.importIcal(\'' + team.code + '\')">Sync Schedule</button>';
             html += '    </div>';
-            html += '    <div style="margin-bottom:0.5rem;">';
-            html += '      <label style="font-size:0.85rem;color:var(--text-secondary);display:block;margin-bottom:0.25rem;">Coach Emails (comma-separated)</label>';
-            html += '      <input type="text" id="coach-emails-' + team.code + '" placeholder="coach1@email.com, coach2@email.com" class="input-field" style="width:100%;font-size:0.9rem;margin:0;padding:0.75rem;color:var(--text-primary);" value="' + escapeAttr((team.coachEmails || []).join(', ')) + '">';
-            html += '      <button class="btn-secondary" style="width:100%;margin-top:0.5rem;" onclick="LaxSync.saveCoachEmails(\'' + team.code + '\')">Save Emails</button>';
-            html += '    </div>';
             html += '    <button class="team-leave-btn" onclick="LaxSync.leaveTeam(\'' + team.code + '\')">Leave Team</button>';
             html += '  </div>';
             html += '</div>';
@@ -1653,24 +1648,8 @@ var LaxSync = (function () {
         });
     }
 
-    // ---- Coach Emails ----
-    function saveCoachEmails(teamCode) {
-        var input = document.getElementById('coach-emails-' + teamCode);
-        var raw = input ? input.value : '';
-        var emails = raw.split(',').map(function (e) { return e.trim(); }).filter(function (e) { return e.length > 0; });
-
-        var teams = getUserTeams();
-        teams.forEach(function (t) {
-            if (t.code === teamCode) t.coachEmails = emails;
-        });
-        setUserTeams(teams);
-        persistTeamsToFirestore();
-        alert('Coach emails saved (' + emails.length + ')');
-    }
-
     // ---- Game Summary Sharing ----
     var SUMMARY_BASE = 'https://us-west1-lax-keeper.cloudfunctions.net/gameSummary';
-    var SEND_SUMMARY_URL = 'https://us-west1-lax-keeper.cloudfunctions.net/sendSummary';
 
     function getGameSummaryUrl(gameId) {
         var teamCode = getActiveTeam();
@@ -1678,74 +1657,17 @@ var LaxSync = (function () {
     }
 
     function shareSummary(gameId) {
-        var teamCode = getActiveTeam();
         var url = getGameSummaryUrl(gameId);
-        var teams = getUserTeams();
-        var team = teams.find(function (t) { return t.code === teamCode; });
-        var emails = (team && team.coachEmails) || [];
 
-        // Build share options
-        var overlay = document.createElement('div');
-        overlay.className = 'overlay overlay--centered';
-        var content = document.createElement('div');
-        content.className = 'overlay-content overlay-content--narrow';
-        content.style.padding = '2rem';
-
-        var html = '<h3 style="text-align:center;margin-bottom:1.5rem;">Share Game Summary</h3>';
-        html += '<button class="btn-primary" style="width:100%;margin-bottom:0.75rem;" onclick="LaxSync._copyLink(\'' + escapeAttr(url) + '\')">Copy Link</button>';
-
-        if (emails.length > 0) {
-            html += '<button class="btn-secondary" style="width:100%;margin-bottom:0.75rem;" onclick="LaxSync._emailSummary(\'' + teamCode + '\',\'' + escapeAttr(gameId) + '\')">Email to Coaches (' + emails.length + ')</button>';
-        } else {
-            html += '<p style="color:var(--text-secondary);font-size:0.85rem;text-align:center;margin-bottom:0.75rem;">Add coach emails in Settings to email summaries</p>';
-        }
-
-        // Native share API (mobile)
-        html += '<button class="btn-secondary" style="width:100%;margin-bottom:0.75rem;" onclick="LaxSync._nativeShare(\'' + escapeAttr(url) + '\')">Share...</button>';
-        html += '<button class="btn-secondary" style="width:100%;" onclick="this.closest(\'.overlay\').remove()">Close</button>';
-
-        content.innerHTML = html;
-        overlay.appendChild(content);
-        overlay.onclick = function (e) { if (e.target === overlay) overlay.remove(); };
-        document.body.appendChild(overlay);
-    }
-
-    function _copyLink(url) {
-        navigator.clipboard.writeText(url).then(function () {
-            alert('Link copied!');
-        }).catch(function () {
-            prompt('Copy this link:', url);
-        });
-    }
-
-    function _nativeShare(url) {
         if (navigator.share) {
             navigator.share({ title: 'Game Summary', url: url }).catch(function () {});
         } else {
-            _copyLink(url);
+            navigator.clipboard.writeText(url).then(function () {
+                alert('Link copied!');
+            }).catch(function () {
+                prompt('Copy this link:', url);
+            });
         }
-    }
-
-    function _emailSummary(teamCode, gameId) {
-        var teams = getUserTeams();
-        var team = teams.find(function (t) { return t.code === teamCode; });
-        var emails = (team && team.coachEmails) || [];
-        if (emails.length === 0) { alert('No coach emails configured.'); return; }
-
-        fetch(SEND_SUMMARY_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ teamCode: teamCode, gameId: gameId, emails: emails })
-        }).then(function (res) { return res.json(); })
-        .then(function (data) {
-            if (data.success) {
-                alert('Summary emailed to ' + data.sent + ' coach(es)!');
-            } else {
-                alert('Email failed: ' + (data.error || 'Unknown error'));
-            }
-        }).catch(function (err) {
-            alert('Email failed: ' + err.message);
-        });
     }
 
     // ---- iCal Schedule Import ----
@@ -2008,11 +1930,7 @@ var LaxSync = (function () {
         setGameInactive: setGameInactive,
         deleteGameFromCloud: deleteGameFromCloud,
         importIcal: importIcal,
-        saveCoachEmails: saveCoachEmails,
         shareSummary: shareSummary,
-        getGameSummaryUrl: getGameSummaryUrl,
-        _copyLink: _copyLink,
-        _nativeShare: _nativeShare,
-        _emailSummary: _emailSummary
+        getGameSummaryUrl: getGameSummaryUrl
     };
 })();
